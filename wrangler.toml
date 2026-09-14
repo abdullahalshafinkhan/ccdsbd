@@ -11,4 +11,4 @@ pages_build_output_dir = "."
 [[d1_databases]]
 binding = "DB"                 # must stay "DB" — functions/api/[[path]].js expects this name
 database_name = "school-db"
-database_id = "PASTE_YOUR_D1_DATABASE_ID_HERE"
+database_id = "79c6746a-9983-473e-857a-8eec98599970"
