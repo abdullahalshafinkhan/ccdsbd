@@ -2235,11 +2235,21 @@ function waitChart() {
   });
 }
 
+const __dashCharts = {};
+function makeChart(canvasId, config) {
+  if (__dashCharts[canvasId]) { try { __dashCharts[canvasId].destroy(); } catch (_) {} delete __dashCharts[canvasId]; }
+  const el = document.getElementById(canvasId);
+  if (!el) return null;
+  const chart = new window.Chart(el, config);
+  __dashCharts[canvasId] = chart;
+  return chart;
+}
+
 async function charts({ students, classes, payments, results }) {
   const Chart = await waitChart(); if (!Chart) return;
   const green = '#0b6b4f', green2 = '#3ddba0';
 
-  new Chart(document.getElementById('chStudents'), {
+  makeChart('chStudents', {
     type: 'bar',
     data: {
       labels: classes.sort((a, b) => a.numeric - b.numeric).map(c => 'Class ' + c.name),
@@ -2254,7 +2264,7 @@ async function charts({ students, classes, payments, results }) {
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - (6 - i)); return d.toISOString().slice(0, 10);
   });
-  new Chart(document.getElementById('chFees'), {
+  makeChart('chFees', {
     type: 'line',
     data: {
       labels: days.map(d => fmtDate(d).slice(0, 6)),
@@ -2264,7 +2274,7 @@ async function charts({ students, classes, payments, results }) {
   });
 
   const grades = ['A+', 'A', 'A-', 'B', 'C', 'D', 'F'];
-  new Chart(document.getElementById('chGrades'), {
+  makeChart('chGrades', {
     type: 'doughnut',
     data: {
       labels: grades,
@@ -2274,7 +2284,7 @@ async function charts({ students, classes, payments, results }) {
     options: { responsive: true, maintainAspectRatio: false }
   });
 
-  new Chart(document.getElementById('chDue'), {
+  makeChart('chDue', {
     type: 'pie',
     data: {
       labels: ['Collected', 'Due'],
@@ -5176,7 +5186,19 @@ const ROUTES = {
   'settings/backup': () => MOD_settings
 };
 
+let __routeRunning = false;
+let __routePending = false;
 async function route() {
+  if (__routeRunning) { __routePending = true; return; }
+  __routeRunning = true;
+  try {
+    await __routeInner();
+  } finally {
+    __routeRunning = false;
+    if (__routePending) { __routePending = false; route(); }
+  }
+}
+async function __routeInner() {
   if (!Auth.isLoggedIn()) return doLogout();
   const path = (location.hash.replace(/^#\/?/, '') || 'dashboard');
   const loader = ROUTES[path] || ROUTES['dashboard'];
