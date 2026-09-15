@@ -5102,9 +5102,12 @@ const MENU = [
   { group: 'Events', items: [['events', '📅', 'Event List'], ['events/add', '➕', 'Add Event']] },
   { group: 'Gallery', items: [['gallery/albums', '🗂️', 'Albums'], ['gallery/upload', '⬆️', 'Upload Photos'], ['gallery/videos', '🎬', 'Videos']] },
   { group: 'Syllabus', items: [['syllabus', '📚', 'Syllabus List'], ['syllabus/add', '➕', 'Add Syllabus']] },
-  { group: 'Website', items: [['web/school', '🏫', 'School Information'], ['web/home', '🏠', 'Homepage Settings'], ['web/holidays', '🗓️', 'Holiday List'], ['web/banner', '🖼️', 'Banner'], ['web/contact', '📞', 'Contact Information'], ['web/social', '🔗', 'Social Links']] },
   { group: 'Reports', items: [['reports/students', '📈', 'Student Report'], ['reports/fees', '💰', 'Fee Report'], ['reports/due', '📉', 'Due Report'], ['reports/results', '🏆', 'Result Report']] },
-  { group: 'Settings', items: [['settings/profile', '👤', 'Admin Profile'], ['settings/password', '🔑', 'Password'], ['settings/school', '🏛️', 'School Settings'], ['settings/backup', '💾', 'Backup / Restore']] },
+  { group: 'Settings', items: [
+    ['settings/profile', '👤', 'Admin Profile'], ['settings/password', '🔑', 'Password'], ['settings/backup', '💾', 'Backup / Restore'],
+    ['web/school', '🏫', 'School Information'], ['settings/school', '🏛️', 'School Settings'], ['web/home', '🏠', 'Homepage Settings'],
+    ['web/holidays', '🗓️', 'Holiday List'], ['web/banner', '🖼️', 'Banner'], ['web/contact', '📞', 'Contact Information'], ['web/social', '🔗', 'Social Links']
+  ] },
 ];
 
 function renderSidebar() {
