@@ -446,13 +446,15 @@ function resizeImageToBlob(file, maxW = 600) {
     fr.readAsDataURL(file);
   });
 }
-async function cloudinaryUpload(fileOrBlob, { resourceType = 'image', publicIdPrefix = '' } = {}) {
+const CL_TAG_ASSET = 'school_asset';   // admin.html এর সাথে হুবহু একই ট্যাগ
+async function cloudinaryUpload(fileOrBlob, { resourceType = 'image', publicIdPrefix = '', tags = [CL_TAG_ASSET] } = {}) {
   const { cloudName, uploadPreset, folder } = APP_CONFIG.cloudinary;
   const fd = new FormData();
   fd.append('file', fileOrBlob);
   fd.append('upload_preset', uploadPreset);
   if (folder) fd.append('folder', folder);
   if (publicIdPrefix) fd.append('public_id', publicIdPrefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+  if (tags && tags.length) fd.append('tags', tags.join(','));
   const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, { method: 'POST', body: fd });
   if (!res.ok) throw new Error('Cloudinary আপলোড ব্যর্থ (' + res.status + ')');
   const json = await res.json();
@@ -461,7 +463,7 @@ async function cloudinaryUpload(fileOrBlob, { resourceType = 'image', publicIdPr
 async function uploadImage(file, maxW = 600, prefix = 'img') {
   if (!file) return '';
   if (cloudinaryReady()) {
-    try { const blob = await resizeImageToBlob(file, maxW); return await cloudinaryUpload(blob, { publicIdPrefix: prefix }); }
+    try { const blob = await resizeImageToBlob(file, maxW); return await cloudinaryUpload(blob, { publicIdPrefix: prefix, tags: [CL_TAG_ASSET] }); }
     catch (e) { console.warn('Cloudinary upload failed, falling back to local image storage:', e); }
   }
   return fileToDataURL(file, maxW);
