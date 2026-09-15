@@ -1058,11 +1058,6 @@ async function verifyPassword(password, user) {
       }
     } catch (_) {}
   }
-  // Emergency: allow default admin password even if hash is broken
-  if (password === 'admin123' &&
-      ((user.email || '').toLowerCase() === 'admin@school.com' || (user.username || '').toLowerCase() === 'admin')) {
-    return true;
-  }
   return false;
 }
 
