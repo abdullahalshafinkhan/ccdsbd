@@ -6,6 +6,8 @@
  *   - a D1 database binding named  DB
  *   - an environment variable / secret named  ADMIN_API_KEY
  *     (must match the `adminKey` set in admin.html's APP_CONFIG)
+ *   - (optional, only needed for the SMS feature) secrets  BULKSMS_API_KEY
+ *     and  BULKSMS_SENDER_ID  from a bulksmsbd.net account — see NEW_FEATURES.md
  *
  * URL shape (mounted at /api/* by the [[path]] filename):
  *   GET    /api/:collection                → list rows
@@ -18,6 +20,7 @@
  *   GET    /api/_dump                      → export the whole database (admin only)
  *   POST   /api/_restore                   → replace the whole database (admin only)
  *   POST   /api/_wipe                      → delete everything (admin only)
+ *   POST   /api/_send-sms                  → send SMS via bulksmsbd.net (admin only)
  *
  * Access control:
  *   - Requests with a correct X-Admin-Key header can read/write anything.
@@ -66,6 +69,56 @@ function err(message, status = 400) {
 function isAdmin(request, env) {
   const key = request.headers.get('X-Admin-Key') || '';
   return !!env.ADMIN_API_KEY && key === env.ADMIN_API_KEY;
+}
+
+/* বাংলাদেশি ফোন নম্বর normalize করে bulksmsbd.net এর প্রত্যাশিত 880XXXXXXXXXX ফরম্যাটে আনে।
+   ইনপুট আসতে পারে: 01712345678 / 1712345678 / 8801712345678 / +8801712345678 / স্পেস-ড্যাশসহ */
+function normalizeBdPhone(raw) {
+  let n = String(raw || '').replace(/[^\d]/g, '');
+  if (n.startsWith('880')) return n;
+  if (n.startsWith('0')) return '880' + n.slice(1);
+  if (n.length === 10) return '880' + n;
+  return n;
+}
+
+/* SMS পাঠায় bulksmsbd.net গেটওয়ে দিয়ে (server-side, তাই API key কখনো ব্রাউজারে যায় না)।
+   Cloudflare Pages → Settings → Environment variables এ BULKSMS_API_KEY ও BULKSMS_SENDER_ID
+   সেট করা না থাকলে স্পষ্ট এরর ফেরত দেয়। প্রতিটি নম্বরের জন্য আলাদা রিকোয়েস্ট পাঠানো হয় যাতে
+   একটা নম্বর ব্যর্থ হলেও বাকিগুলো চলতে থাকে; ফলাফল প্রতিটির জন্য আলাদা করে ফেরত দেওয়া হয়। */
+async function sendSms(request, env) {
+  if (!env.BULKSMS_API_KEY || !env.BULKSMS_SENDER_ID) {
+    return err('SMS গেটওয়ে কনফিগার করা নেই। Cloudflare Pages → Settings → Environment variables এ BULKSMS_API_KEY ও BULKSMS_SENDER_ID যোগ করুন।', 500);
+  }
+  let body;
+  try { body = await request.json(); } catch (_) { return err('Invalid JSON body', 400); }
+  const numbers = Array.isArray(body.numbers) ? body.numbers : [];
+  const message = String(body.message || '').trim();
+  if (!numbers.length) return err('numbers অ্যারে খালি — অন্তত একটি ফোন নম্বর দিন', 400);
+  if (!message) return err('message খালি রাখা যাবে না', 400);
+  if (numbers.length > 500) return err('একবারে সর্বোচ্চ ৫০০টি নম্বরে পাঠানো যাবে', 400);
+
+  const results = [];
+  for (const raw of numbers) {
+    const number = normalizeBdPhone(raw);
+    if (!/^880\d{10}$/.test(number)) { results.push({ number: raw, ok: false, error: 'অবৈধ ফোন নম্বর' }); continue; }
+    const url = 'https://bulksmsbd.net/api/smsapi'
+      + '?api_key=' + encodeURIComponent(env.BULKSMS_API_KEY)
+      + '&type=text'
+      + '&number=' + encodeURIComponent(number)
+      + '&senderid=' + encodeURIComponent(env.BULKSMS_SENDER_ID)
+      + '&message=' + encodeURIComponent(message);
+    try {
+      const res = await fetch(url);
+      const text = (await res.text()).trim();
+      // bulksmsbd.net সফল হলে responseCode 202 (numeric) ফেরত দেয়, ব্যর্থ হলে অন্য কোড/মেসেজ
+      const ok = res.ok && /^202\b/.test(text);
+      results.push({ number, ok, response: text });
+    } catch (e) {
+      results.push({ number, ok: false, error: e.message || 'নেটওয়ার্ক এরর' });
+    }
+  }
+  const sent = results.filter(r => r.ok).length;
+  return json({ sent, failed: results.length - sent, results });
 }
 
 async function readAll(env, collection) {
@@ -138,6 +191,11 @@ export async function onRequest(context) {
       if (!admin) return err('Unauthorized', 401);
       await env.DB.prepare('DELETE FROM documents').run();
       return json({ ok: true });
+    }
+    if (parts[0] === '_send-sms') {
+      if (request.method !== 'POST') return err('Method not allowed', 405);
+      if (!admin) return err('Unauthorized', 401);
+      return sendSms(request, env);
     }
 
     const collection = parts[0];

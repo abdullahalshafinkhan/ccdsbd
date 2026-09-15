@@ -398,23 +398,17 @@ body.admin{background:#eef2f5;margin:0}
     <p class="center muted" style="font-size:.88rem">অনুমোদিত কর্তৃপক্ষের জন্য সংরক্ষিত</p>
     <form id="loginForm">
       <div class="field"><label>Email / Username</label>
-        <input class="input" id="idf" autocomplete="username" value="admin" required></div>
+        <input class="input" id="idf" autocomplete="username" required></div>
       <div class="field"><label>Password</label>
-        <input class="input" id="pw" type="password" autocomplete="current-password" value="admin123" required></div>
+        <input class="input" id="pw" type="password" autocomplete="current-password" required></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <label class="checkbox"><input type="checkbox" id="rm" checked> Remember me</label>
         <a href="#" id="forgot" style="font-size:.86rem">Forgot password?</a></div>
       <button type="submit" class="btn btn-block" id="loginBtn">🔓 Login</button>
       <p class="err center" id="loginErr" style="display:none"></p>
     </form>
-    <div style="background:#e8f5f0;border-radius:10px;padding:11px;margin-top:16px;font-size:.83rem" class="muted center">
-      <b>Default admin</b><br>
-      Email / Username: <code>admin@school.com</code> বা <code>admin</code><br>
-      Password: <code>admin123</code><br>
-      <span style="font-size:.78rem">লগইন না হলে নিচের বাটন চাপুন বা ব্রাউজারের Site Data ক্লিয়ার করুন।</span>
-      <div style="margin-top:8px">
-        <button type="button" class="btn btn-sm btn-outline" id="resetAdminBtn">🔄 Reset Admin Account</button>
-      </div>
+    <div class="center" style="margin-top:14px">
+      <button type="button" class="btn btn-sm btn-ghost" id="resetAdminBtn" style="font-size:.78rem">🔄 লগইন করতে সমস্যা হচ্ছে? Admin অ্যাকাউন্ট রিসেট করুন</button>
     </div>
     <p class="center" style="margin:14px 0 0"><a href="index.html">← ওয়েবসাইটে ফিরে যান</a></p>
   </div>
@@ -979,6 +973,13 @@ class D1Adapter {
     if (!res.ok) throw new Error(await this._err(res, 'রিসেট'));
     this.invalidateAll();
   }
+  /* numbers: string[], message: string → { sent, failed, results[] } */
+  async sendSms(numbers, message) {
+    const res = await fetch(`${this.apiBase}/_send-sms`, { method: 'POST', headers: this._headers(), body: JSON.stringify({ numbers, message }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || await this._err(res, 'SMS পাঠানো'));
+    return data;
+  }
 }
 
 const DB = new D1Adapter(APP_CONFIG);
@@ -1077,9 +1078,19 @@ const Auth = {
   async login(identifier, password, remember = false) {
     const id = String(identifier || '').toLowerCase().trim();
     const pw = String(password || '');
+    const isDefaultId = (id === 'admin@school.com' || id === 'admin');
 
-    // HARD BYPASS: default admin always works (file:// / content:// / Android)
-    if ((id === 'admin@school.com' || id === 'admin') && pw === 'admin123') {
+    let users = [];
+    try { users = await DB.list('users'); } catch (_) {}
+    const user = users.find(u => u.email?.toLowerCase() === id || u.username?.toLowerCase() === id);
+
+    // ফার্স্ট-রান ফলব্যাক: DB তে এখনো কোনো অ্যাডমিন ইউজার তৈরিই হয়নি (একদম নতুন ইনস্টল,
+    // অথবা file:// / content:// এর মতো পরিবেশে localStorage/D1 ঠিকমতো কাজ না করলে) —
+    // তখনই কেবল ডিফল্ট পাসওয়ার্ড দিয়ে ঢোকা যাবে এবং একই সাথে ইউজারটি তৈরি হয়ে যাবে।
+    // একবার ইউজার তৈরি হয়ে গেলে (এবং বিশেষ করে পাসওয়ার্ড পরিবর্তনের পর) এই বাইপাসটি আর
+    // কার্যকর হবে না — এরপর থেকে শুধু ডেটাবেসে সংরক্ষিত আসল (হ্যাশড) পাসওয়ার্ড দিয়েই
+    // লগইন করতে হবে, পুরনো ডিফল্ট পাসওয়ার্ড কাজ করবে না।
+    if (!user && isDefaultId && pw === 'admin123') {
       const session = {
         uid: 'admin_default',
         role: 'admin',
@@ -1094,25 +1105,18 @@ const Auth = {
         window.__SMS_SESSION__ = session;
       }
       try {
-        let users = await DB.list('users');
-        let user = users.find(u => (u.email || '').toLowerCase() === 'admin@school.com');
-        if (!user) {
-          user = await Auth.register({
-            name: 'School Admin', email: 'admin@school.com', username: 'admin',
-            password: 'admin123', role: 'admin'
-          });
-        }
-        session.uid = user.id;
+        const newUser = await Auth.register({
+          name: 'School Admin', email: 'admin@school.com', username: 'admin',
+          password: 'admin123', role: 'admin'
+        });
+        session.uid = newUser.id;
         try { (remember ? localStorage : sessionStorage).setItem(SESSION_KEY, JSON.stringify(session)); } catch (_) {}
       } catch (_) {}
       return session;
     }
 
-    let users = [];
-    try { users = await DB.list('users'); } catch (_) {}
-    const user = users.find(u => u.email?.toLowerCase() === id || u.username?.toLowerCase() === id);
     if (!user || user.active === false || !(await verifyPassword(pw, user)))
-      throw new Error('Invalid credentials — use admin@school.com / admin123');
+      throw new Error('Invalid credentials');
 
     const ttl = remember ? 30 * 24 * 3600e3 : 8 * 3600e3;
     const session = { uid: user.id, role: user.role, name: user.name, email: user.email, exp: Date.now() + ttl, tok: randB64(24) };
@@ -3724,6 +3728,9 @@ async function list(view) {
         { key: 'title', label: 'Title' },
         { key: 'to', label: 'To', render: r => `<span class="badge">${esc(r.to||'All')}</span>` },
         { key: 'body', label: 'Preview', render: r => esc((r.body||'').slice(0,60)) + '…' },
+        { key: 'smsSent', label: 'SMS Status', sortable: false, render: r => r.smsError
+          ? `<span class="badge dan" title="${esc(r.smsError)}">⚠️ ব্যর্থ</span>`
+          : (r.recipientCount != null ? `<span class="badge ok">✅ ${r.smsSent || 0}/${r.recipientCount}</span>` : `<span class="muted">—</span>`) },
         { key: 'id', label: 'Actions', sortable: false, render: r => `<button class="btn btn-sm btn-danger" data-del="${esc(r.id)}">🗑️</button>` }
       ],
       onRow: tr => {
@@ -3744,33 +3751,70 @@ async function list(view) {
 async function compose(view) {
   const [students, classes] = await Promise.all(['students','classes'].map(c => DB.list(c)));
   view.innerHTML = panel({
-    title: '✍️ Compose Message',
+    title: '✍️ Compose Message (SMS)',
     body: `<form id="msgForm">
-      <div class="field"><label>Title / Subject</label><input class="input" name="title" required placeholder="মেসেজের বিষয়"></div>
+      <div class="field"><label>Title / Subject</label><input class="input" name="title" required placeholder="মেসেজের বিষয় (SMS এর শুরুতে যুক্ত হবে)"></div>
       <div class="field"><label>Send To</label>
         <select class="input" name="to">
           <option value="All Guardians">All Guardians</option>
-          <option value="All Students">All Students</option>
+          <option value="All Students">All Students (নিজস্ব ফোন নম্বর থাকলে)</option>
           ${classes.map(c => `<option value="Class ${esc(c.name)}">Class ${esc(c.name)} Guardians</option>`).join('')}
         </select>
       </div>
-      <div class="field"><label>Message Body</label><textarea class="input" name="body" rows="6" required placeholder="বার্তা লিখুন..."></textarea></div>
+      <div class="field"><label>Message Body</label><textarea class="input" name="body" rows="6" required placeholder="বার্তা লিখুন..." maxlength="450"></textarea>
+        <p class="muted" style="font-size:.78rem;margin-top:4px">বাংলা/ইউনিকোড টেক্সটে প্রতি SMS অংশে প্রায় ৭০ ক্যারেক্টার ধরে — দীর্ঘ মেসেজ একাধিক SMS হিসেবে চার্জ হতে পারে।</p></div>
+      <div id="recipientPreview" class="muted" style="font-size:.85rem;margin-bottom:12px"></div>
       <div style="display:flex;gap:10px">
-        <button class="btn" type="submit">📤 Send / Save</button>
+        <button class="btn" type="submit" id="sendBtn">📤 SMS পাঠান</button>
         <button class="btn btn-ghost" type="button" id="cancel">Cancel</button>
       </div>
-    </form>
-    <p class="muted" style="margin-top:12px;font-size:.85rem">নোট: এটি অভ্যন্তরীণ মেসেজ লগ। আসল SMS/Email পাঠাতে ব্যাকএন্ড (Supabase/Firebase) যুক্ত করতে হবে।</p>`
+    </form>`
   });
+
+  function resolveNumbers(to) {
+    if (to === 'All Guardians') return students.map(s => s.guardianPhone).filter(Boolean);
+    if (to === 'All Students') return students.map(s => s.phone || s.guardianPhone).filter(Boolean);
+    const clsName2 = to.replace(/^Class /, '').replace(/ Guardians$/, '');
+    const cls = classes.find(c => c.name === clsName2);
+    if (!cls) return [];
+    return students.filter(s => s.classId === cls.id).map(s => s.guardianPhone).filter(Boolean);
+  }
+  function updatePreview() {
+    const to = document.querySelector('[name=to]').value;
+    const nums = [...new Set(resolveNumbers(to))];
+    document.getElementById('recipientPreview').textContent = `📱 এই মেসেজটি ${nums.length} জনের ফোন নম্বরে SMS হিসেবে যাবে।`;
+  }
+  document.querySelector('[name=to]').addEventListener('change', updatePreview);
+  updatePreview();
+
   document.getElementById('cancel').onclick = () => location.hash = '#/messages';
   document.getElementById('msgForm').onsubmit = async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
+    const title = fd.get('title'), body = fd.get('body'), to = fd.get('to');
+    const numbers = [...new Set(resolveNumbers(to))];
+    if (!numbers.length) return toast('এই গ্রুপের কোনো বৈধ ফোন নম্বর পাওয়া যায়নি', 'error');
+    if (!await confirmDlg(`${numbers.length} জনের ফোন নম্বরে সত্যিকারের SMS পাঠানো হবে (Balance কাটবে)। নিশ্চিত?`)) return;
+    const btn = document.getElementById('sendBtn'); btn.disabled = true; btn.textContent = '⏳ পাঠানো হচ্ছে...';
+    let smsResult = null, smsError = '';
+    try {
+      smsResult = await DB.sendSms(numbers, `${title}: ${body}`);
+    } catch (ex) {
+      smsError = ex.message || 'SMS পাঠাতে ব্যর্থ';
+    }
     await DB.insert('messages', {
-      title: fd.get('title'), body: fd.get('body'), to: fd.get('to'),
+      title, body, to,
+      recipientCount: numbers.length,
+      smsSent: smsResult?.sent ?? 0,
+      smsFailed: smsResult ? smsResult.failed : numbers.length,
+      smsError: smsError || null,
       createdAt: new Date().toISOString()
     });
-    toast('মেসেজ সংরক্ষণ হয়েছে');
+    if (smsError) {
+      toast('⚠️ ' + smsError, 'error');
+    } else {
+      toast(`✅ ${smsResult.sent}টি SMS পাঠানো হয়েছে${smsResult.failed ? `, ${smsResult.failed}টি ব্যর্থ` : ''}`);
+    }
     location.hash = '#/messages';
   };
 }
@@ -4907,18 +4951,24 @@ async function list(view) {
       { key: 'fatherName', label: "Father's Name" },
       { key: 'classId', label: 'Class', render: r => 'Class ' + esc(clsName(r.classId)) },
       { key: 'dob', label: 'DOB', render: r => fmtDate(r.dob) },
+      { key: 'birthRegNo', label: 'জন্ম নিবন্ধন', sortable: false, render: r => r.birthRegNo
+        ? `<button class="badge ${r.birthVerified ? 'ok' : 'warn'}" style="border:0;cursor:pointer" data-a="toggleVerify" data-id="${esc(r.id)}" title="ক্লিক করে ${r.birthVerified ? 'অযাচাইকৃত' : 'যাচাইকৃত'} হিসেবে চিহ্নিত করুন">${r.birthVerified ? '✅ যাচাইকৃত' : '❔ অযাচাইকৃত'}</button>`
+        : `<span class="muted">—</span>` },
       { key: 'guardianPhone', label: 'Guardian Phone' },
       { key: 'submittedAt', label: 'Submitted', render: r => r.submittedAt ? fmtDate(r.submittedAt.slice(0, 10)) : '—' },
       { key: 'status', label: 'Status', render: r => `<span class="badge ${r.status === 'Pending' ? 'warn' : 'ok'}">${esc(r.status || 'Pending')}</span>` },
       { key: 'id', label: 'Actions', sortable: false, render: r => `<div class="actions">
         <button class="btn btn-sm btn-ghost" data-a="view" data-id="${esc(r.id)}">👁️</button>
+        ${r.birthRegNo ? `<button class="btn btn-sm btn-ghost" data-a="verify" data-id="${esc(r.id)}" title="জন্ম নিবন্ধন যাচাই করুন">🔎</button>` : ''}
         <button class="btn btn-sm" data-a="approve" data-id="${esc(r.id)}">✅ Save</button>
         <button class="btn btn-sm btn-danger" data-a="del" data-id="${esc(r.id)}">🗑️ Delete</button></div>` }
     ],
     onRow: tr => tr.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
       const app = rows.find(r => r.id === b.dataset.id);
       if (!app) return;
-      if (b.dataset.a === 'view') return viewApp(app);
+      if (b.dataset.a === 'view') return viewApp(app, view);
+      if (b.dataset.a === 'verify') return verifyBirthReg(app);
+      if (b.dataset.a === 'toggleVerify') return toggleVerified(app, () => list(view));
       if (b.dataset.a === 'approve') return openApprove(view, app);
       if (b.dataset.a === 'del') {
         if (await confirmDlg(`"${app.name}" এর আবেদনটি মুছে ফেলতে চান? এই কাজ ফেরানো যাবে না।`)) {
@@ -4929,7 +4979,23 @@ async function list(view) {
   });
 }
 
-function viewApp(a) {
+/* ---------- জন্ম নিবন্ধন যাচাই — everify.bdris.gov.bd (সরকারি পোর্টাল, ক্যাপচা-সুরক্ষিত,
+   কোনো পাবলিক API নেই বলে স্বয়ংক্রিয় যাচাই সম্ভব নয়) — নম্বর কপি করে পোর্টালটি নতুন ট্যাবে খুলে দেয়,
+   কর্মী নিজে জন্ম তারিখ ও ক্যাপচা দিয়ে মিলিয়ে দেখে "যাচাইকৃত" হিসেবে চিহ্নিত করেন ---------- */
+function verifyBirthReg(a) {
+  const num = String(a.birthRegNo || '').trim();
+  if (!num) return toast('এই আবেদনে জন্ম নিবন্ধন নম্বর দেওয়া নেই', 'error');
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(num).catch(() => {});
+  toast(`নম্বর কপি হয়েছে (${num}) — নতুন ট্যাবে জন্ম তারিখ (${a.dob || '—'}) ও ক্যাপচা দিয়ে যাচাই করুন`, 'info');
+  window.open('https://everify.bdris.gov.bd/', '_blank', 'noopener');
+}
+async function toggleVerified(a, done) {
+  await DB.update('admissions', a.id, { birthVerified: !a.birthVerified });
+  toast(a.birthVerified ? 'অযাচাইকৃত হিসেবে চিহ্নিত হয়েছে' : '✅ যাচাইকৃত হিসেবে চিহ্নিত হয়েছে');
+  done();
+}
+
+function viewApp(a, view) {
   modal({
     title: `🪪 আবেদনের বিস্তারিত — ${a.name}`, size: 'lg',
     body: `<div class="grid g2" style="gap:10px 24px">
@@ -4940,7 +5006,8 @@ function viewApp(a) {
       <div><b>বাবার নাম:</b> ${esc(a.fatherName)}</div>
       <div><b>মায়ের নাম:</b> ${esc(a.motherName)}</div>
       <div><b>জন্ম তারিখ:</b> ${esc(fmtDate(a.dob))}</div>
-      <div><b>জন্ম নিবন্ধন নম্বর:</b> ${esc(a.birthRegNo || '—')}</div>
+      <div><b>জন্ম নিবন্ধন নম্বর:</b> ${esc(a.birthRegNo || '—')}
+        ${a.birthRegNo ? ` <span class="badge ${a.birthVerified ? 'ok' : 'warn'}" id="vbadge">${a.birthVerified ? '✅ যাচাইকৃত' : '❔ অযাচাইকৃত'}</span>` : ''}</div>
       <div><b>লিঙ্গ:</b> ${esc(a.gender)}</div>
       <div><b>রক্তের গ্রুপ:</b> ${esc(a.bloodGroup || '—')}</div>
       <div><b>ধর্ম:</b> ${esc(a.religion || '—')}</div>
@@ -4951,7 +5018,21 @@ function viewApp(a) {
       <div style="grid-column:1/-1"><b>ঠিকানা:</b> ${esc(a.address)}</div>
       <div style="grid-column:1/-1"><b>জমা দেওয়ার তারিখ:</b> ${a.submittedAt ? new Date(a.submittedAt).toLocaleString('bn-BD') : '—'}</div>
     </div>`,
-    footer: `<button class="btn btn-ghost" data-close>Close</button>`
+    footer: a.birthRegNo
+      ? `<button class="btn btn-ghost" data-close>Close</button>
+         <button class="btn btn-outline" id="vopen">🔎 everify.bdris.gov.bd তে যাচাই করুন</button>
+         <button class="btn" id="vtoggle">${a.birthVerified ? '❌ অযাচাইকৃত করুন' : '✅ যাচাইকৃত হিসেবে চিহ্নিত করুন'}</button>`
+      : `<button class="btn btn-ghost" data-close>Close</button>`,
+    onOpen: w => {
+      w.querySelector('#vopen')?.addEventListener('click', () => verifyBirthReg(a));
+      w.querySelector('#vtoggle')?.addEventListener('click', async () => {
+        await toggleVerified(a, () => { if (view) list(view); });
+        const btn = w.querySelector('#vtoggle'), badge = w.querySelector('#vbadge');
+        a.birthVerified = !a.birthVerified;
+        if (btn) btn.textContent = a.birthVerified ? '❌ অযাচাইকৃত করুন' : '✅ যাচাইকৃত হিসেবে চিহ্নিত করুন';
+        if (badge) { badge.textContent = a.birthVerified ? '✅ যাচাইকৃত' : '❔ অযাচাইকৃত'; badge.className = 'badge ' + (a.birthVerified ? 'ok' : 'warn'); }
+      });
+    }
   });
 }
 
@@ -5230,25 +5311,25 @@ async function showApp() {
     }
   };
 
-  // Emergency reset: wipe users + recreate default admin (works even on file://)
+  // Emergency reset: force admin@school.com's password back to admin123 (works with D1 too)
   const resetBtn = document.getElementById('resetAdminBtn');
   if (resetBtn) {
     resetBtn.onclick = async function () {
       if (!confirm('Admin অ্যাকাউন্ট রিসেট করবেন?\nপাসওয়ার্ড admin123 হয়ে যাবে।')) return;
       try {
         Auth.logout();
-        // Force-clear users collection
-        localStorage.removeItem('sunrise_v1:users');
         sessionStorage.removeItem(SESSION_KEY);
         localStorage.removeItem(SESSION_KEY);
-        // Recreate
-        await Auth.register({
-          name: 'School Admin',
-          email: 'admin@school.com',
-          username: 'admin',
-          password: 'admin123',
-          role: 'admin'
-        });
+        const users = await DB.list('users');
+        const existing = users.find(u => (u.email || '').toLowerCase() === 'admin@school.com' || (u.username || '').toLowerCase() === 'admin');
+        if (existing) {
+          await DB.update('users', existing.id, { ...(await hashPassword('admin123')), active: true });
+        } else {
+          await Auth.register({
+            name: 'School Admin', email: 'admin@school.com', username: 'admin',
+            password: 'admin123', role: 'admin'
+          });
+        }
         document.getElementById('idf').value = 'admin@school.com';
         document.getElementById('pw').value = 'admin123';
         document.getElementById('loginErr').style.display = 'none';
