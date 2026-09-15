@@ -23,7 +23,8 @@
  *   - Requests with a correct X-Admin-Key header can read/write anything.
  *   - Without that header, only PUBLIC_READ collections are readable (and some
  *     of those are row-filtered — e.g. only published notices/results, only
- *     active teachers), and only PUBLIC_WRITE collections accept inserts
+ *     active teachers). `syllabus` (class-wise PDF syllabus) is fully public-read
+ *     since it has no per-row draft/publish state. Only PUBLIC_WRITE collections accept inserts
  *     (the public admission-apply form, and the sequence counters it uses).
  *   - Everything else (students' individual PII stays inside PUBLIC_READ
  *     because the public "find my result"/print flow already needs it —
@@ -33,7 +34,7 @@
 const PUBLIC_READ = new Set([
   'school', 'teachers', 'classes', 'sections', 'subjects', 'notices',
   'events', 'albums', 'photos', 'videos', 'banners', 'results', 'exams',
-  'students', 'counters'
+  'students', 'counters', 'syllabus'
 ]);
 
 // rows in these collections are filtered before being sent to a non-admin reader

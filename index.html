@@ -417,8 +417,8 @@ const APP_CONFIG = {
   apiBase: '/api',
   adminKey: '', // পাবলিক সাইট — খালি রাখুন
   cloudinary: {
-    cloudName: 'y2jlujeh',
-    uploadPreset: 'ccdsbd',
+    cloudName: 'CHANGE_ME_CLOUD_NAME',
+    uploadPreset: 'CHANGE_ME_UPLOAD_PRESET',
     folder: 'school'
   }
 };
@@ -1162,6 +1162,74 @@ async function seedIfEmpty() {
 
 let SCHOOL = {};
 
+/* ============================================================
+   🌐 ভাষা টগল (বাংলা / English) — শুধু সাইটের নিজস্ব লেবেল/হেডিং অনুবাদ করে।
+   Admin Panel থেকে টাইপ করা কনটেন্ট (স্কুলের নাম, নোটিশ, শিক্ষকের তথ্য ইত্যাদি)
+   যে ভাষায় লেখা হয়েছে সে ভাষাতেই থাকবে — এগুলো অটো-ট্রান্সলেট হয় না।
+   ============================================================ */
+const LANG_KEY = 'school_site_lang';
+let LANG = localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'bn';
+function setLang(l) { LANG = l === 'en' ? 'en' : 'bn'; localStorage.setItem(LANG_KEY, LANG); location.reload(); }
+const I18N = {
+  bn: {
+    notice_tag: '📢 নোটিশ', quick_links: 'Quick Links', more: 'More', contact: 'Contact',
+    notice_board: '📢 নোটিশ বোর্ড', all_notices: 'সব নোটিশ', latest_news: '📰 সর্বশেষ সংবাদ ও কার্যক্রম', all_events: 'সব ইভেন্ট',
+    why_choose: 'Why choose us', features_title: 'স্কুলের বৈশিষ্ট্যসমূহ', features_sub: 'আধুনিক সুযোগ-সুবিধা ও মানসম্মত শিক্ষা নিশ্চিতে আমাদের অঙ্গীকার।',
+    academic_kicker: 'Academic', academic_title: 'একাডেমিক তথ্য',
+    play_group: 'প্লে গ্রুপ', play_group_d: 'Play, Nursery — শিশুবান্ধব পরিবেশে হাতেখড়ি।',
+    primary: 'প্রাথমিক শাখা', primary_d: 'One — Five, শিশুবান্ধব পাঠদান পদ্ধতি।',
+    secondary: 'মাধ্যমিক শাখা', secondary_d: 'Six — Ten, বিজ্ঞান ও মানবিক বিভাগ।',
+    higher_secondary: 'উচ্চ মাধ্যমিক শাখা', higher_secondary_d: 'Eleven — Twelve, বিজ্ঞান, মানবিক ও ব্যবসায় শিক্ষা বিভাগ।',
+    class_time: 'ক্লাস সময়সূচি', class_time_d: 'সকাল ৮:০০ — দুপুর ১:৩০ (শনি — বৃহস্পতি)।',
+    exam_system: 'পরীক্ষা পদ্ধতি', exam_system_d: 'অর্ধ-বার্ষিক ও বার্ষিক পরীক্ষা, ধারাবাহিক মূল্যায়ন।',
+    academic_more: 'একাডেমিক বিস্তারিত →',
+    our_team: 'Our team', teachers_title: 'আমাদের শিক্ষকমণ্ডলী', all_teachers: 'সকল শিক্ষক দেখুন',
+    gallery_kicker: 'Gallery', gallery_title: 'ফটো গ্যালারি', full_gallery: 'সম্পূর্ণ গ্যালারি',
+    contact_us: 'যোগাযোগ করুন', contact_us_sub: 'যেকোনো তথ্যের জন্য অফিস চলাকালীন সময়ে যোগাযোগ করুন।', contact_page: 'Contact Page →',
+    about_us: 'আমাদের পরিচিতি', read_more: 'বিস্তারিত পড়ুন →', at_a_glance: 'এক নজরে',
+    established: 'প্রতিষ্ঠাকাল', head_teacher: 'প্রধান শিক্ষক', class_range: 'শ্রেণি', session: 'শিক্ষাবর্ষ', vision_label: 'Vision:',
+    students: 'শিক্ষার্থী', teachers: 'শিক্ষক', classes: 'শ্রেণি', years_legacy: 'বছরের ঐতিহ্য',
+    apply_now: '🎓 ভর্তির আবেদন করুন', view_results: 'ফলাফল দেখুন',
+    principal_msg: 'প্রধান শিক্ষকের বাণী', full_msg: 'সম্পূর্ণ বাণী →', principal_badge: 'অধ্যক্ষ',
+    no_notice: 'এখনো কোনো নোটিশ প্রকাশিত হয়নি।', no_event: 'কোনো ইভেন্ট নেই।',
+    no_gallery: 'Admin Panel → Gallery থেকে ছবি আপলোড করুন।',
+    syllabus_kicker: 'Syllabus', syllabus_title: 'ক্লাসভিত্তিক সিলেবাস', syllabus_sub: 'প্রতিটি শ্রেণির সিলেবাস PDF আকারে ডাউনলোড করুন।',
+    syllabus_download: '📥 ডাউনলোড', no_syllabus: 'এখনো কোনো সিলেবাস আপলোড করা হয়নি।',
+    holiday_kicker: 'Holidays', holiday_title: 'বাৎসরিক ছুটির তালিকা', holiday_sub: 'শিক্ষাবর্ষের সরকারি ও প্রাতিষ্ঠানিক ছুটির তালিকা।',
+    holiday_name: 'ছুটির নাম', holiday_from: 'শুরু', holiday_to: 'শেষ', no_holiday: 'এখনো কোনো ছুটির তালিকা প্রকাশ করা হয়নি।',
+    login: '🔒 Login',
+  },
+  en: {
+    notice_tag: '📢 Notice', quick_links: 'Quick Links', more: 'More', contact: 'Contact',
+    notice_board: '📢 Notice Board', all_notices: 'All Notices', latest_news: '📰 Latest News & Activities', all_events: 'All Events',
+    why_choose: 'Why choose us', features_title: 'Why Choose Our School', features_sub: 'Our commitment to modern facilities and quality education.',
+    academic_kicker: 'Academic', academic_title: 'Academic Information',
+    play_group: 'Play Group', play_group_d: 'Play, Nursery — early learning in a child-friendly environment.',
+    primary: 'Primary Section', primary_d: 'One — Five, child-friendly teaching methods.',
+    secondary: 'Secondary Section', secondary_d: 'Six — Ten, Science and Humanities groups.',
+    higher_secondary: 'Higher Secondary', higher_secondary_d: 'Eleven — Twelve, Science, Humanities & Business Studies.',
+    class_time: 'Class Schedule', class_time_d: '8:00 AM — 1:30 PM (Saturday — Thursday).',
+    exam_system: 'Examination System', exam_system_d: 'Half-yearly and annual exams, continuous assessment.',
+    academic_more: 'Academic Details →',
+    our_team: 'Our team', teachers_title: 'Our Teachers', all_teachers: 'View All Teachers',
+    gallery_kicker: 'Gallery', gallery_title: 'Photo Gallery', full_gallery: 'Full Gallery',
+    contact_us: 'Contact Us', contact_us_sub: 'Reach out to us during office hours for any information.', contact_page: 'Contact Page →',
+    about_us: 'About Us', read_more: 'Read More →', at_a_glance: 'At a Glance',
+    established: 'Established', head_teacher: 'Head Teacher', class_range: 'Classes', session: 'Session', vision_label: 'Vision:',
+    students: 'Students', teachers: 'Teachers', classes: 'Classes', years_legacy: 'Years of Legacy',
+    apply_now: '🎓 Apply for Admission', view_results: 'View Results',
+    principal_msg: "Principal's Message", full_msg: 'Full Message →', principal_badge: 'Principal',
+    no_notice: 'No notices published yet.', no_event: 'No events available.',
+    no_gallery: 'Upload photos from Admin Panel → Gallery.',
+    syllabus_kicker: 'Syllabus', syllabus_title: 'Class-wise Syllabus', syllabus_sub: 'Download the syllabus PDF for each class.',
+    syllabus_download: '📥 Download', no_syllabus: 'No syllabus has been uploaded yet.',
+    holiday_kicker: 'Holidays', holiday_title: 'Annual Holiday List', holiday_sub: 'List of official and institutional holidays for the academic year.',
+    holiday_name: 'Holiday', holiday_from: 'From', holiday_to: 'To', no_holiday: 'No holiday list has been published yet.',
+    login: '🔒 Login',
+  }
+};
+function t(key) { return (I18N[LANG] && I18N[LANG][key]) ?? (I18N.bn[key] ?? key); }
+
 const NAV = [
   ['#/home', 'Home'], ['#/admission', 'Admission'], ['#/about', 'About School'], ['#/principal', "Principal's Message"],
   ['#/academic', 'Academic'], ['#/teachers', 'Teachers'], ['#/students', 'Students'],
@@ -1184,9 +1252,11 @@ const logoHTML = (cls = 'logo') => SCHOOL.logo
 function renderHeader(cur) {
   cur = '#/' + (cur || 'home');
   const host = $('#siteHeader'); if (!host) return;
+  const langBtn = (extraCls = '') => `<button type="button" class="btn btn-sm btn-outline ${extraCls}" id="langToggle${extraCls ? '_m' : ''}" style="${extraCls ? 'margin:10px 20px;width:calc(100% - 40px)' : 'margin-right:8px'}" title="Change language">${LANG === 'bn' ? '🌐 English' : '🌐 বাংলা'}</button>`;
   const navLinks = (extraCls = '') => `
     ${NAV.map(([h, t]) => `<a href="${h}" class="${h === cur ? 'active' : ''} ${extraCls}">${esc(t)}</a>`).join('')}
-    <a href="admin.html" class="btn btn-sm ${extraCls}" style="color:#fff">🔒 Login</a>`;
+    ${langBtn(extraCls)}
+    <a href="admin.html" class="btn btn-sm ${extraCls}" style="color:#fff">${t('login')}</a>`;
   host.innerHTML = `
   <div class="topbar"><div class="container">
     <div>📞 <a href="tel:${esc(SCHOOL.phone)}">${esc(SCHOOL.phone)}</a> &nbsp;|&nbsp; ✉ <a href="mailto:${esc(SCHOOL.email)}">${esc(SCHOOL.email)}</a></div>
@@ -1202,20 +1272,22 @@ function renderHeader(cur) {
     <nav>
       <ul class="menu" id="mainMenu">
         ${NAV.map(([h, t]) => `<li><a href="${h}" class="${h === cur ? 'active' : ''}">${esc(t)}</a></li>`).join('')}
-        <li><a href="admin.html" class="btn btn-sm" style="color:#fff">🔒 Login</a></li>
+        <li>${langBtn()}</li>
+        <li><a href="admin.html" class="btn btn-sm" style="color:#fff">${t('login')}</a></li>
       </ul>
     </nav>
     <button class="burger" id="burger" aria-label="Menu">☰</button>
   </div></header>
   <div class="ticker-bar" id="noticeTicker"><div class="container">
-    <span class="ticker-tag">📢 নোটিশ</span>
-    <div class="ticker-view"><div class="ticker-track">লোড হচ্ছে…</div></div>
+    <span class="ticker-tag">${t('notice_tag')}</span>
+    <div class="ticker-view"><div class="ticker-track">${LANG === 'bn' ? 'লোড হচ্ছে…' : 'Loading…'}</div></div>
   </div></div>
   <nav class="mobile-menu" id="mobileMenu">${navLinks('m-link')}</nav>`;
   const menu = $('#mainMenu');
   const mMenu = $('#mobileMenu');
   $('#burger').onclick = () => { menu.classList.toggle('open'); mMenu.classList.toggle('open'); };
   loadNoticeTicker();
+  $$('#langToggle, #langToggle_m').forEach(b => b && (b.onclick = () => setLang(LANG === 'bn' ? 'en' : 'bn')));
   $$('#mainMenu a, #mobileMenu a').forEach(a => a.onclick = () => { menu.classList.remove('open'); mMenu.classList.remove('open'); });
 }
 
@@ -1244,9 +1316,9 @@ function renderFooter() {
           ${SCHOOL.linkedin ? `<a href="${esc(SCHOOL.linkedin)}" target="_blank" rel="noopener" title="LinkedIn">in</a>` : ''}
         </div>
       </div>
-      <div><h4>Quick Links</h4>${NAV.slice(0, 6).map(([h, t]) => `<a href="${h}">${esc(t)}</a>`).join('')}</div>
-      <div><h4>More</h4>${NAV.slice(6).map(([h, t]) => `<a href="${h}">${esc(t)}</a>`).join('')}<a href="admin.html">Admin Login</a></div>
-      <div><h4>Contact</h4>
+      <div><h4>${t('quick_links')}</h4>${NAV.slice(0, 6).map(([h, t]) => `<a href="${h}">${esc(t)}</a>`).join('')}</div>
+      <div><h4>${t('more')}</h4>${NAV.slice(6).map(([h, t]) => `<a href="${h}">${esc(t)}</a>`).join('')}<a href="admin.html">Admin Login</a></div>
+      <div><h4>${t('contact')}</h4>
         <p style="font-size:.9rem">📍 ${esc(SCHOOL.address)}</p>
         <p style="font-size:.9rem">📞 ${esc(SCHOOL.phone)}<br>✉ ${esc(SCHOOL.email)}<br>🌐 ${esc(SCHOOL.website)}</p>
       </div>
@@ -1270,8 +1342,8 @@ async function buildHome() {
       <div class="slide ${i === 0 ? 'on' : ''}" style="background-image:${s.image ? `url('${esc(s.image)}')` : grads[i % 3]}">
         <div class="slide-in">
           <h1>${esc(s.title || '')}</h1><p>${esc(s.sub || '')}</p>
-          <div class="hero-btns"><a class="btn btn-light" href="#/admission">🎓 ভর্তির আবেদন করুন</a>
-          <a class="btn btn-accent" href="#/result">ফলাফল দেখুন</a></div>
+          <div class="hero-btns"><a class="btn btn-light" href="#/admission">${t('apply_now')}</a>
+          <a class="btn btn-accent" href="#/result">${t('view_results')}</a></div>
         </div></div>`).join('')
       + `<div class="hero-dots">${slides.map((_, i) => `<button class="${i === 0 ? 'on' : ''}" data-i="${i}" aria-label="Slide ${i + 1}"></button>`).join('')}</div>`;
     let idx = 0;
@@ -1284,48 +1356,49 @@ async function buildHome() {
     setInterval(() => show(idx + 1), 6000);
   }
 
-  const [students, teachers, classes, notices, events, photos] = await Promise.all(
-    ['students', 'teachers', 'classes', 'notices', 'events', 'photos'].map(c => DB.list(c)));
+  const [students, teachers, classes, notices, events, photos, syllabusRows, holidayList] = await Promise.all(
+    ['students', 'teachers', 'classes', 'notices', 'events', 'photos', 'syllabus'].map(c => DB.list(c))
+      .concat([Promise.resolve(SCHOOL.holidays || [])]));
 
   const st = $('#statStrip');
   if (st) st.innerHTML = `<div class="container"><div class="grid">
-    <div class="stat"><b>${students.length}+</b><span>শিক্ষার্থী</span></div>
-    <div class="stat"><b>${teachers.length}+</b><span>শিক্ষক</span></div>
-    <div class="stat"><b>${classes.length}</b><span>শ্রেণি</span></div>
-    <div class="stat"><b>${new Date().getFullYear() - num(SCHOOL.established)}</b><span>বছরের ঐতিহ্য</span></div>
+    <div class="stat"><b>${students.length}+</b><span>${t('students')}</span></div>
+    <div class="stat"><b>${teachers.length}+</b><span>${t('teachers')}</span></div>
+    <div class="stat"><b>${classes.length}</b><span>${t('classes')}</span></div>
+    <div class="stat"><b>${new Date().getFullYear() - num(SCHOOL.established)}</b><span>${t('years_legacy')}</span></div>
   </div></div>`;
 
   const intro = $('#introBox');
   if (intro) intro.innerHTML = `
     <div class="grid g2" style="align-items:center">
-      <div><span class="badge">আমাদের পরিচিতি</span>
+      <div><span class="badge">${t('about_us')}</span>
         <h2 style="margin-top:10px">${esc(SCHOOL.name)}</h2>
         <p class="muted">${esc(SCHOOL.about)}</p>
-        <p class="muted"><b>Vision:</b> ${esc(SCHOOL.vision)}</p>
-        <a class="btn" href="#/about">বিস্তারিত পড়ুন →</a></div>
+        <p class="muted"><b>${t('vision_label')}</b> ${esc(SCHOOL.vision)}</p>
+        <a class="btn" href="#/about">${t('read_more')}</a></div>
       <div class="card" style="padding:0;background:linear-gradient(135deg,#0b6b4f,#0e8a66);color:#fff">
         <div class="card-pad">
-          <h3 style="color:#fff">এক নজরে</h3>
+          <h3 style="color:#fff">${t('at_a_glance')}</h3>
           <table style="width:100%;font-size:.92rem;color:#dff0e9">
-            <tr><td>প্রতিষ্ঠাকাল</td><td style="text-align:right"><b>${esc(SCHOOL.established)}</b></td></tr>
+            <tr><td>${t('established')}</td><td style="text-align:right"><b>${esc(SCHOOL.established)}</b></td></tr>
             <tr><td>EIIN</td><td style="text-align:right"><b>${esc(SCHOOL.eiin)}</b></td></tr>
-            <tr><td>প্রধান শিক্ষক</td><td style="text-align:right"><b>${esc(SCHOOL.principalName)}</b></td></tr>
-            <tr><td>শ্রেণি</td><td style="text-align:right"><b>Play — Twelve</b></td></tr>
-            <tr><td>শিক্ষাবর্ষ</td><td style="text-align:right"><b>${esc(SCHOOL.session)}</b></td></tr>
+            <tr><td>${t('head_teacher')}</td><td style="text-align:right"><b>${esc(SCHOOL.principalName)}</b></td></tr>
+            <tr><td>${t('class_range')}</td><td style="text-align:right"><b>Play — Twelve</b></td></tr>
+            <tr><td>${t('session')}</td><td style="text-align:right"><b>${esc(SCHOOL.session)}</b></td></tr>
           </table>
         </div></div></div>`;
 
   const nb = $('#noticeBox');
   if (nb) {
     const pub = notices.filter(n => n.published).sort((a, b) => (b.date || '').localeCompare(a.date)).slice(0, 5);
-    nb.innerHTML = pub.length ? pub.map(n => noticeRow(n)).join('') : `<p class="muted">এখনো কোনো নোটিশ প্রকাশিত হয়নি।</p>`;
+    nb.innerHTML = pub.length ? pub.map(n => noticeRow(n)).join('') : `<p class="muted">${t('no_notice')}</p>`;
     bindNotice(nb, notices);
   }
 
   const eb = $('#eventBox');
   if (eb) {
     const up = events.slice().sort((a, b) => (a.date || '').localeCompare(b.date)).slice(0, 3);
-    eb.innerHTML = up.length ? up.map(e => eventCard(e)).join('') : `<p class="muted">কোনো ইভেন্ট নেই।</p>`;
+    eb.innerHTML = up.length ? up.map(e => eventCard(e)).join('') : `<p class="muted">${t('no_event')}</p>`;
   }
 
   const fb = $('#featureBox');
@@ -1335,9 +1408,9 @@ async function buildHome() {
   const pm = $('#principalBox');
   if (pm) pm.innerHTML = `<div class="grid g2" style="align-items:center">
     <div class="center">${SCHOOL.principalPhoto ? `<img class="avatar" style="width:190px;height:190px" src="${esc(SCHOOL.principalPhoto)}" alt="">` : `<div class="avatar" style="width:190px;height:190px;font-size:3.6rem">👨‍🏫</div>`}
-      <h3 style="margin-top:12px">${esc(SCHOOL.principalName)}</h3><span class="badge">অধ্যক্ষ</span></div>
-    <div><h2>প্রধান শিক্ষকের বাণী</h2><p class="muted">${esc(SCHOOL.principalMessage)}</p>
-      <a class="btn btn-outline" href="#/principal">সম্পূর্ণ বাণী →</a></div></div>`;
+      <h3 style="margin-top:12px">${esc(SCHOOL.principalName)}</h3><span class="badge">${t('principal_badge')}</span></div>
+    <div><h2>${t('principal_msg')}</h2><p class="muted">${esc(SCHOOL.principalMessage)}</p>
+      <a class="btn btn-outline" href="#/principal">${t('full_msg')}</a></div></div>`;
 
   const tb = $('#teacherBox');
   if (tb) tb.innerHTML = teachers.slice(0, 4).map(teacherCard).join('');
@@ -1346,8 +1419,31 @@ async function buildHome() {
   if (gb) {
     const ph = photos.slice(0, 8);
     gb.innerHTML = ph.length ? ph.map(p => `<figure><img src="${esc(p.image)}" alt="${esc(p.caption || '')}" loading="lazy"></figure>`).join('')
-      : `<p class="muted" style="grid-column:1/-1">Admin Panel → Gallery থেকে ছবি আপলোড করুন।</p>`;
+      : `<p class="muted" style="grid-column:1/-1">${t('no_gallery')}</p>`;
   }
+
+  const sb = $('#syllabusBox');
+  if (sb) {
+    const classMap = Object.fromEntries(classes.map(c => [c.id, c.name]));
+    const byClass = classes.slice().sort((a, b) => (a.numeric ?? 0) - (b.numeric ?? 0))
+      .map(c => ({ cls: c, items: syllabusRows.filter(r => r.classId === c.id) }))
+      .filter(g => g.items.length);
+    sb.innerHTML = byClass.length ? `<div class="grid g4">${byClass.map(g => `
+      <div class="card card-pad">
+        <h4 style="margin:0 0 10px">Class ${esc(classMap[g.cls.id] || '')}</h4>
+        ${g.items.map(it => `<a class="btn btn-sm btn-outline" style="margin:0 6px 6px 0" href="${esc(it.file)}" target="_blank" rel="noopener" download="${esc(it.fileName || 'syllabus.pdf')}">${t('syllabus_download')} — ${esc(it.title || '')}</a>`).join('')}
+      </div>`).join('')}</div>` : `<p class="muted">${t('no_syllabus')}</p>`;
+  }
+
+  const hb = $('#holidayBox');
+  if (hb) {
+    const list = (holidayList || []).slice().sort((a, b) => (a.fromDate || '').localeCompare(b.fromDate || ''));
+    hb.innerHTML = list.length ? `<div class="table-wrap"><table class="tbl">
+      <thead><tr><th>${t('holiday_name')}</th><th>${t('holiday_from')}</th><th>${t('holiday_to')}</th></tr></thead>
+      <tbody>${list.map(h => `<tr><td>${esc(h.title)}</td><td>${fmtDate(h.fromDate)}</td><td>${fmtDate(h.toDate)}</td></tr>`).join('')}</tbody>
+    </table></div>` : `<p class="muted">${t('no_holiday')}</p>`;
+  }
+
   const mp = $('#mapBox');
   if (mp && SCHOOL.mapEmbed) mp.innerHTML = `<iframe src="${esc(SCHOOL.mapEmbed)}" width="100%" height="330" style="border:0;border-radius:14px" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Map"></iframe>`;
 }
@@ -1942,41 +2038,47 @@ async function pageHome(host) {
     <section class="section"><div class="container"><div class="grid g2">
       <div class="card card-pad">
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <h3>📢 নোটিশ বোর্ড</h3><a class="btn btn-sm btn-outline" href="#/notice">সব নোটিশ</a></div>
+          <h3>${t('notice_board')}</h3><a class="btn btn-sm btn-outline" href="#/notice">${t('all_notices')}</a></div>
         <div id="noticeBox"></div></div>
       <div class="card card-pad">
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <h3>📰 সর্বশেষ সংবাদ ও কার্যক্রম</h3><a class="btn btn-sm btn-outline" href="#/events">সব ইভেন্ট</a></div>
+          <h3>${t('latest_news')}</h3><a class="btn btn-sm btn-outline" href="#/events">${t('all_events')}</a></div>
         <div class="grid" id="eventBox" style="margin-top:12px"></div></div>
     </div></div></section>
     <section class="section alt"><div class="container">
-      ${secHead('Why choose us', 'স্কুলের বৈশিষ্ট্যসমূহ', 'আধুনিক সুযোগ-সুবিধা ও মানসম্মত শিক্ষা নিশ্চিতে আমাদের অঙ্গীকার।')}
+      ${secHead(t('why_choose'), t('features_title'), t('features_sub'))}
       <div class="grid g4" id="featureBox"></div></div></section>
     <section class="section"><div class="container" id="principalBox"></div></section>
     <section class="section alt"><div class="container">
-      ${secHead('Academic', 'একাডেমিক তথ্য')}
+      ${secHead(t('academic_kicker'), t('academic_title'))}
       <div class="grid g4">
-        <div class="feature"><div class="ic">🧸</div><h4>প্লে গ্রুপ</h4><p>Play, Nursery — শিশুবান্ধব পরিবেশে হাতেখড়ি।</p></div>
-        <div class="feature"><div class="ic">🏫</div><h4>প্রাথমিক শাখা</h4><p>One — Five, শিশুবান্ধব পাঠদান পদ্ধতি।</p></div>
-        <div class="feature"><div class="ic">📗</div><h4>মাধ্যমিক শাখা</h4><p>Six — Ten, বিজ্ঞান ও মানবিক বিভাগ।</p></div>
-        <div class="feature"><div class="ic">🎓</div><h4>উচ্চ মাধ্যমিক শাখা</h4><p>Eleven — Twelve, বিজ্ঞান, মানবিক ও ব্যবসায় শিক্ষা বিভাগ।</p></div>
-        <div class="feature"><div class="ic">🕘</div><h4>ক্লাস সময়সূচি</h4><p>সকাল ৮:০০ — দুপুর ১:৩০ (শনি — বৃহস্পতি)।</p></div>
-        <div class="feature"><div class="ic">📝</div><h4>পরীক্ষা পদ্ধতি</h4><p>অর্ধ-বার্ষিক ও বার্ষিক পরীক্ষা, ধারাবাহিক মূল্যায়ন।</p></div>
-      </div><div class="center" style="margin-top:22px"><a class="btn" href="#/academic">একাডেমিক বিস্তারিত →</a></div>
-    </div></section>
-    <section class="section"><div class="container">
-      ${secHead('Our team', 'আমাদের শিক্ষকমণ্ডলী')}
-      <div class="grid g4" id="teacherBox"></div>
-      <div class="center" style="margin-top:22px"><a class="btn btn-outline" href="#/teachers">সকল শিক্ষক দেখুন</a></div>
+        <div class="feature"><div class="ic">🧸</div><h4>${t('play_group')}</h4><p>${t('play_group_d')}</p></div>
+        <div class="feature"><div class="ic">🏫</div><h4>${t('primary')}</h4><p>${t('primary_d')}</p></div>
+        <div class="feature"><div class="ic">📗</div><h4>${t('secondary')}</h4><p>${t('secondary_d')}</p></div>
+        <div class="feature"><div class="ic">🎓</div><h4>${t('higher_secondary')}</h4><p>${t('higher_secondary_d')}</p></div>
+        <div class="feature"><div class="ic">🕘</div><h4>${t('class_time')}</h4><p>${t('class_time_d')}</p></div>
+        <div class="feature"><div class="ic">📝</div><h4>${t('exam_system')}</h4><p>${t('exam_system_d')}</p></div>
+      </div><div class="center" style="margin-top:22px"><a class="btn" href="#/academic">${t('academic_more')}</a></div>
     </div></section>
     <section class="section alt"><div class="container">
-      ${secHead('Gallery', 'ফটো গ্যালারি')}
-      <div class="gal" id="galleryBox"></div>
-      <div class="center" style="margin-top:22px"><a class="btn btn-outline" href="#/gallery">সম্পূর্ণ গ্যালারি</a></div>
+      ${secHead(t('syllabus_kicker'), t('syllabus_title'), t('syllabus_sub'))}
+      <div id="syllabusBox"></div></div></section>
+    <section class="section"><div class="container">
+      ${secHead(t('our_team'), t('teachers_title'))}
+      <div class="grid g4" id="teacherBox"></div>
+      <div class="center" style="margin-top:22px"><a class="btn btn-outline" href="#/teachers">${t('all_teachers')}</a></div>
     </div></section>
-    <section class="section"><div class="container"><div class="grid g2">
-      <div><h2>যোগাযোগ করুন</h2><p class="muted">যেকোনো তথ্যের জন্য অফিস চলাকালীন সময়ে যোগাযোগ করুন।</p>
-        <div id="contactInfo"></div><a class="btn" href="#/contact">Contact Page →</a></div>
+    <section class="section alt"><div class="container">
+      ${secHead(t('gallery_kicker'), t('gallery_title'))}
+      <div class="gal" id="galleryBox"></div>
+      <div class="center" style="margin-top:22px"><a class="btn btn-outline" href="#/gallery">${t('full_gallery')}</a></div>
+    </div></section>
+    <section class="section"><div class="container">
+      ${secHead(t('holiday_kicker'), t('holiday_title'), t('holiday_sub'))}
+      <div id="holidayBox"></div></div></section>
+    <section class="section alt"><div class="container"><div class="grid g2">
+      <div><h2>${t('contact_us')}</h2><p class="muted">${t('contact_us_sub')}</p>
+        <div id="contactInfo"></div><a class="btn" href="#/contact">${t('contact_page')}</a></div>
       <div id="mapBox"></div>
     </div></div></section>`;
   await buildHome();

@@ -456,8 +456,8 @@ const APP_CONFIG = {
   // হুবহু সেই একই মান নিচে বসান। এই মান কাউকে শেয়ার করবেন না।
   adminKey: '778dd50e7bd67764cee506c84cea0b83518d1f971bc9462490e563439a5b33e4',
   cloudinary: {
-    cloudName: 'y2jlujeh',        // Cloudinary Dashboard → Cloud name
-    uploadPreset: 'ccdsbd',  // Cloudinary → Settings → Upload → Add unsigned upload preset
+    cloudName: 'CHANGE_ME_CLOUD_NAME',        // Cloudinary Dashboard → Cloud name
+    uploadPreset: 'CHANGE_ME_UPLOAD_PRESET',  // Cloudinary → Settings → Upload → Add unsigned upload preset
     folder: 'school'                          // Cloudinary তে ছবি ও ব্যাকআপ যে ফোল্ডারে জমা হবে
   }
 };
@@ -814,7 +814,7 @@ const debounce = (fn, ms = 250) => { let t; return (...a) => { clearTimeout(t); 
 const COLLECTIONS = [
   'users', 'school', 'students', 'teachers', 'admissions', 'classes', 'sections', 'subjects',
   'feeHeads', 'payments', 'exams', 'results', 'notices', 'events',
-  'albums', 'photos', 'videos', 'banners', 'counters',
+  'albums', 'photos', 'videos', 'banners', 'counters', 'syllabus',
   'attendance', 'messages', 'routines', 'examRoutine'
 ];
 
@@ -3936,6 +3936,72 @@ function form(notice, done) {
 return { render: __render };
 })();
 
+/* ===== module: syllabus (ক্লাসভিত্তিক সিলেবাস — PDF আপলোড) ===== */
+const MOD_syllabus = (function(){
+
+async function __render(view, path) {
+  if (path === 'syllabus/add') return form(null, () => location.hash = '#/syllabus');
+  return list(view);
+}
+
+async function list(view) {
+  const [rows, classes] = await Promise.all([DB.list('syllabus'), DB.list('classes')]);
+  const classMap = Object.fromEntries(classes.map(c => [c.id, c.name]));
+  const sorted = rows.slice().sort((a, b) => (classMap[a.classId] || '').localeCompare(classMap[b.classId] || '') || (b.createdAt || '').localeCompare(a.createdAt || ''));
+  view.innerHTML = panel({
+    title: '📚 ক্লাসভিত্তিক সিলেবাস', actions: `<button class="btn btn-sm" id="add">➕ Add Syllabus</button>`,
+    body: `<p class="muted" style="font-size:.87rem">এখানে যা আপলোড করবেন তা পাবলিক হোমপেজে ক্লাস অনুযায়ী ডাউনলোডযোগ্য PDF হিসেবে দেখাবে।</p><div id="t"></div>`
+  });
+  const dt = new DataTable(document.getElementById('t'), {
+    rows: sorted, pageSize: 10, searchKeys: ['title'],
+    cols: [
+      { key: 'classId', label: 'Class', render: r => `<span class="badge">${esc(classMap[r.classId] ? 'Class ' + classMap[r.classId] : '—')}</span>` },
+      { key: 'title', label: 'শিরোনাম' },
+      { key: 'file', label: 'PDF', sortable: false, render: r => r.file ? `<a class="btn btn-sm btn-ghost" href="${esc(r.file)}" target="_blank" rel="noopener" download="${esc(r.fileName || 'syllabus.pdf')}">📎 দেখুন</a>` : '—' },
+      { key: 'id', label: 'Actions', sortable: false, render: r => `<div class="actions">
+        <button class="btn btn-sm btn-ghost" data-a="edit" data-id="${esc(r.id)}">✏️</button>
+        <button class="btn btn-sm btn-danger" data-a="del" data-id="${esc(r.id)}">🗑️</button></div>` }
+    ],
+    onRow: tr => tr.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
+      const n = await DB.get('syllabus', b.dataset.id);
+      if (b.dataset.a === 'edit') return form(n, () => list(view));
+      if (await confirmDlg('এই সিলেবাসটি ডিলিট করবেন?')) { await DB.remove('syllabus', n.id); toast('Deleted'); list(view); }
+    })
+  });
+  document.getElementById('add').onclick = () => form(null, () => list(view));
+}
+
+async function form(row, done) {
+  const classes = (await DB.list('classes')).slice().sort((a, b) => (a.numeric ?? 0) - (b.numeric ?? 0));
+  const FIELDS = [
+    { name: 'classId', label: 'Class', type: 'select', required: true, options: [['', '— Select —'], ...classes.map(c => [c.id, 'Class ' + c.name])] },
+    { name: 'title', label: 'শিরোনাম (যেমন: বার্ষিক সিলেবাস ২০২৬)', required: true, full: true },
+    { name: 'file', label: 'PDF ফাইল' + (row?.file ? ' (নতুন ফাইল না দিলে আগেরটিই থাকবে)' : ''), type: 'file', accept: 'application/pdf', required: !row, full: true },
+  ];
+  modal({
+    title: row ? '✏️ Edit Syllabus' : '➕ Add Syllabus', size: 'lg',
+    body: `<form>${formHTML(FIELDS, row || {})}</form>`,
+    footer: `<button class="btn btn-ghost" data-close>Cancel</button><button class="btn" id="s">💾 Save</button>`,
+    onOpen: (w, close) => w.querySelector('#s').onclick = async () => {
+      const d = readForm(w, FIELDS);
+      const { ok, errors } = validate(d, { classId: [V.required], title: [V.required] });
+      showErrors(w, errors); if (!ok) return toast('ফর্মে ত্রুটি আছে', 'error');
+      const f = w.querySelector('[name=file]').files?.[0];
+      if (f) {
+        if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) return toast('শুধুমাত্র PDF ফাইল আপলোড করুন', 'error');
+        d.file = await uploadFile(f, 'syllabus'); d.fileName = f.name;
+      } else if (!row) {
+        return toast('একটি PDF ফাইল নির্বাচন করুন', 'error');
+      } else { d.file = row.file || ''; d.fileName = row.fileName || ''; }
+      if (row) await DB.update('syllabus', row.id, d); else await DB.insert('syllabus', d);
+      toast('Saved'); close(); done();
+    }
+  });
+}
+
+return { render: __render };
+})();
+
 /* ===== module: events ===== */
 const MOD_events = (function(){
 /* events.js — event CRUD */
@@ -4181,6 +4247,7 @@ async function __render(view, path) {
     { name: 'instagram', label: 'Instagram URL' }, { name: 'whatsapp', label: 'WhatsApp Number' },
   ]);
   if (path === 'web/home') return homepage(view, s);
+  if (path === 'web/holidays') return holidays(view, s);
   return schoolInfo(view, s);
 }
 
@@ -4244,7 +4311,7 @@ async function homepage(view, s) {
   const rows = (s.features || []).map((f, i) => ({ id: String(i), ...f }));
   const FF = [{ name: 'icon', label: 'Icon (emoji)', required: true }, { name: 'title', label: 'Title', required: true },
     { name: 'text', label: 'Description', type: 'textarea', full: true, required: true }];
-  const persist = async list => { await save({ features: list.map(({ icon, title, text }) => ({ icon, title, text })) }); render(view, 'web/home'); };
+  const persist = async list => { await save({ features: list.map(({ icon, title, text }) => ({ icon, title, text })) }); homepage(view, await school()); };
   new DataTable(document.getElementById('t'), {
     rows, pageSize: 12, searchKeys: ['title'],
     cols: [{ key: 'icon', label: 'Icon' }, { key: 'title', label: 'Title' }, { key: 'text', label: 'Description' },
@@ -4265,6 +4332,53 @@ async function homepage(view, s) {
     title: '➕ Add Feature', body: `<form>${formHTML(FF, { icon: '⭐' })}</form>`,
     footer: `<button class="btn btn-ghost" data-close>Cancel</button><button class="btn" id="s">Add</button>`,
     onOpen: (w, close) => w.querySelector('#s').onclick = async () => { const d = readForm(w, FF); close(); persist([...rows, d]); }
+  });
+}
+
+/* ---------- বাৎসরিক ছুটির তালিকা (Annual Holiday List) — homepage এ পাবলিক দেখায় ---------- */
+async function holidays(view, s) {
+  view.innerHTML = panel({
+    title: '🗓️ বাৎসরিক ছুটির তালিকা',
+    actions: `<button class="btn btn-sm" id="add">➕ Add Holiday</button>`,
+    body: `<p class="muted" style="font-size:.87rem">এখানে যোগ করা ছুটিগুলো তারিখ অনুযায়ী সাজিয়ে পাবলিক হোমপেজে দেখানো হবে।</p><div id="t"></div>`
+  });
+  const rows = (s.holidays || []).map((h, i) => ({ id: String(i), ...h }))
+    .sort((a, b) => (a.fromDate || '').localeCompare(b.fromDate || ''));
+  const FF = [
+    { name: 'title', label: 'ছুটির নাম', required: true, full: true },
+    { name: 'fromDate', label: 'শুরুর তারিখ', type: 'date', required: true },
+    { name: 'toDate', label: 'শেষের তারিখ', type: 'date', required: true },
+  ];
+  const persist = async list => { await save({ holidays: list.map(({ title, fromDate, toDate }) => ({ title, fromDate, toDate })) }); holidays(view, await school()); };
+  new DataTable(document.getElementById('t'), {
+    rows, pageSize: 15, searchKeys: ['title'],
+    cols: [
+      { key: 'title', label: 'ছুটির নাম' },
+      { key: 'fromDate', label: 'শুরু', render: r => fmtDate(r.fromDate) },
+      { key: 'toDate', label: 'শেষ', render: r => fmtDate(r.toDate) },
+      { key: 'id', label: 'Actions', sortable: false, render: r => `<div class="actions">
+        <button class="btn btn-sm btn-ghost" data-a="edit" data-id="${esc(r.id)}">✏️</button>
+        <button class="btn btn-sm btn-danger" data-a="del" data-id="${esc(r.id)}">🗑️</button></div>` }
+    ],
+    onRow: tr => tr.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
+      const i = rows.findIndex(r => r.id === b.dataset.id);
+      if (b.dataset.a === 'del') { if (await confirmDlg('এই ছুটিটি ডিলিট করবেন?')) { const l = rows.slice(); l.splice(i, 1); persist(l); } return; }
+      modal({ title: '✏️ Edit Holiday', body: `<form>${formHTML(FF, rows[i])}</form>`,
+        footer: `<button class="btn btn-ghost" data-close>Cancel</button><button class="btn" id="s">Save</button>`,
+        onOpen: (w, close) => w.querySelector('#s').onclick = async () => {
+          const l = rows.slice(); l[i] = { ...l[i], ...readForm(w, FF) }; close(); persist(l);
+        } });
+    })
+  });
+  document.getElementById('add').onclick = () => modal({
+    title: '➕ Add Holiday', body: `<form>${formHTML(FF, {})}</form>`,
+    footer: `<button class="btn btn-ghost" data-close>Cancel</button><button class="btn" id="s">Add</button>`,
+    onOpen: (w, close) => w.querySelector('#s').onclick = async () => {
+      const d = readForm(w, FF);
+      const { ok, errors } = validate(d, { title: [V.required], fromDate: [V.required], toDate: [V.required] });
+      showErrors(w, errors); if (!ok) return toast('ফর্মে ত্রুটি আছে', 'error');
+      close(); persist([...rows, d]);
+    }
   });
 }
 
@@ -4901,7 +5015,8 @@ const MENU = [
   { group: 'Notices', items: [['notices', '📢', 'Notice List'], ['notices/add', '➕', 'Add Notice']] },
   { group: 'Events', items: [['events', '📅', 'Event List'], ['events/add', '➕', 'Add Event']] },
   { group: 'Gallery', items: [['gallery/albums', '🗂️', 'Albums'], ['gallery/upload', '⬆️', 'Upload Photos'], ['gallery/videos', '🎬', 'Videos']] },
-  { group: 'Website', items: [['web/school', '🏫', 'School Information'], ['web/home', '🏠', 'Homepage Settings'], ['web/banner', '🖼️', 'Banner'], ['web/contact', '📞', 'Contact Information'], ['web/social', '🔗', 'Social Links']] },
+  { group: 'Syllabus', items: [['syllabus', '📚', 'Syllabus List'], ['syllabus/add', '➕', 'Add Syllabus']] },
+  { group: 'Website', items: [['web/school', '🏫', 'School Information'], ['web/home', '🏠', 'Homepage Settings'], ['web/holidays', '🗓️', 'Holiday List'], ['web/banner', '🖼️', 'Banner'], ['web/contact', '📞', 'Contact Information'], ['web/social', '🔗', 'Social Links']] },
   { group: 'Reports', items: [['reports/students', '📈', 'Student Report'], ['reports/fees', '💰', 'Fee Report'], ['reports/due', '📉', 'Due Report'], ['reports/results', '🏆', 'Result Report']] },
   { group: 'Settings', items: [['settings/profile', '👤', 'Admin Profile'], ['settings/password', '🔑', 'Password'], ['settings/school', '🏛️', 'School Settings'], ['settings/backup', '💾', 'Backup / Restore']] },
 ];
@@ -4967,8 +5082,11 @@ const ROUTES = {
   'gallery/albums': () => MOD_gallery,
   'gallery/upload': () => MOD_gallery,
   'gallery/videos': () => MOD_gallery,
+  'syllabus': () => MOD_syllabus,
+  'syllabus/add': () => MOD_syllabus,
   'web/school': () => MOD_website,
   'web/home': () => MOD_website,
+  'web/holidays': () => MOD_website,
   'web/banner': () => MOD_website,
   'web/contact': () => MOD_website,
   'web/social': () => MOD_website,
