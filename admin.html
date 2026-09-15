@@ -407,9 +407,6 @@ body.admin{background:#eef2f5;margin:0}
       <button type="submit" class="btn btn-block" id="loginBtn">🔓 Login</button>
       <p class="err center" id="loginErr" style="display:none"></p>
     </form>
-    <div class="center" style="margin-top:14px">
-      <button type="button" class="btn btn-sm btn-ghost" id="resetAdminBtn" style="font-size:.78rem">🔄 লগইন করতে সমস্যা হচ্ছে? Admin অ্যাকাউন্ট রিসেট করুন</button>
-    </div>
     <p class="center" style="margin:14px 0 0"><a href="index.html">← ওয়েবসাইটে ফিরে যান</a></p>
   </div>
 </div>
@@ -1155,21 +1152,32 @@ const Auth = {
     return DB.update('users', userId, await hashPassword(newPw));
   },
 
-  /* Forgot password: offline demo issues a reset token the admin can use.
-     With Supabase/Firebase, call their resetPasswordForEmail() instead. */
-  async requestReset(email) {
-    const users = await DB.list('users');
-    const u = users.find(x => x.email?.toLowerCase() === String(email).toLowerCase());
-    if (!u) return null;                       // silent — no enumeration
-    const token = randB64(9).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase();
-    await DB.update('users', u.id, { resetToken: token, resetExp: Date.now() + 30 * 60e3 });
-    return token;
+  /* Forgot password: recovery only through two fixed security questions —
+     there is no other password-reset path in the admin panel. */
+  SECURITY_QUESTIONS: [
+    { q: 'সাইট টির নির্মাতা কে?', a: 'মো মাহবুবুর রহমান' },
+    { q: 'নির্মাতার জন্ম তারিখ কত?', a: '৯ মার্চ' }
+  ],
+  _normAnswer(s) {
+    return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
   },
-  async resetWithToken(email, token, newPw) {
+  _answersMatch(a1, a2) {
+    return Auth._normAnswer(a1) === Auth._normAnswer(Auth.SECURITY_QUESTIONS[0].a) &&
+           Auth._normAnswer(a2) === Auth._normAnswer(Auth.SECURITY_QUESTIONS[1].a);
+  },
+  async verifySecurityAnswers(email, a1, a2) {
     const users = await DB.list('users');
-    const u = users.find(x => x.email?.toLowerCase() === String(email).toLowerCase());
-    if (!u || u.resetToken !== token || !u.resetExp || u.resetExp < Date.now())
-      throw new Error('Invalid or expired reset token');
+    const u = users.find(x => x.email?.toLowerCase() === String(email || '').toLowerCase());
+    if (!u) throw new Error('এই ই-মেইলে কোনো অ্যাকাউন্ট পাওয়া যায়নি');
+    if (!Auth._answersMatch(a1, a2)) throw new Error('উত্তর সঠিক নয়');
+    return true;
+  },
+  async resetWithSecurityAnswers(email, a1, a2, newPw) {
+    const users = await DB.list('users');
+    const u = users.find(x => x.email?.toLowerCase() === String(email || '').toLowerCase());
+    if (!u) throw new Error('এই ই-মেইলে কোনো অ্যাকাউন্ট পাওয়া যায়নি');
+    if (!Auth._answersMatch(a1, a2)) throw new Error('উত্তর সঠিক নয়');
+    if (String(newPw || '').length < 6) throw new Error('নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে');
     await DB.update('users', u.id, { ...(await hashPassword(newPw)), resetToken: null, resetExp: null });
     return true;
   }
@@ -5331,56 +5339,33 @@ async function showApp() {
     }
   };
 
-  // Emergency reset: force admin@school.com's password back to admin123 (works with D1 too)
-  const resetBtn = document.getElementById('resetAdminBtn');
-  if (resetBtn) {
-    resetBtn.onclick = async function () {
-      if (!confirm('Admin অ্যাকাউন্ট রিসেট করবেন?\nপাসওয়ার্ড admin123 হয়ে যাবে।')) return;
-      try {
-        Auth.logout();
-        sessionStorage.removeItem(SESSION_KEY);
-        localStorage.removeItem(SESSION_KEY);
-        const users = await DB.list('users');
-        const existing = users.find(u => (u.email || '').toLowerCase() === 'admin@school.com' || (u.username || '').toLowerCase() === 'admin');
-        if (existing) {
-          await DB.update('users', existing.id, { ...(await hashPassword('admin123')), active: true });
-        } else {
-          await Auth.register({
-            name: 'School Admin', email: 'admin@school.com', username: 'admin',
-            password: 'admin123', role: 'admin'
-          });
-        }
-        document.getElementById('idf').value = 'admin@school.com';
-        document.getElementById('pw').value = 'admin123';
-        document.getElementById('loginErr').style.display = 'none';
-        alert('✅ Admin রিসেট সফল!\n\nEmail: admin@school.com\nPassword: admin123\n\nএখন Login বাটনে ক্লিক করুন।');
-      } catch (ex) {
-        console.error(ex);
-        // Last-resort: allow direct session
-        alert('রিসেট ত্রুটি: ' + ex.message + '\n\nব্রাউজারের Local Storage মুছে আবার চেষ্টা করুন।');
-      }
-    };
-  }
-
   document.getElementById('forgot').onclick = function (e) {
     e.preventDefault();
     modal({ title: 'Forgot Password', body:
       '<div class="field"><label>রেজিস্টার্ড ই-মেইল</label><input class="input" id="fe" type="email"></div>' +
-      '<button class="btn btn-sm" id="send">Reset token তৈরি করুন</button>' +
+      '<div class="field"><label>১. সাইট টির নির্মাতা কে?</label><input class="input" id="fq1"></div>' +
+      '<div class="field"><label>২. নির্মাতার জন্ম তারিখ কত?</label><input class="input" id="fq2"></div>' +
+      '<button class="btn btn-sm" id="verify">যাচাই করুন</button>' +
       '<div id="step2" style="display:none;margin-top:14px;border-top:1px solid var(--line);padding-top:14px">' +
-      '<div class="field"><label>Reset Token</label><input class="input" id="ft"></div>' +
       '<div class="field"><label>নতুন পাসওয়ার্ড</label><input class="input" id="fp" type="password"></div>' +
       '<button class="btn btn-sm" id="doreset">পাসওয়ার্ড রিসেট করুন</button></div>' +
-      '<p class="muted" style="font-size:.8rem;margin-top:12px">অফলাইন মোডে টোকেন স্ক্রিনে দেখানো হয়। Supabase/Firebase যুক্ত করলে এটি ই-মেইলে যাবে (README দেখুন)।</p>',
+      '<p class="muted" style="font-size:.8rem;margin-top:12px">দুটি প্রশ্নের সঠিক উত্তর দিলে তবেই নতুন পাসওয়ার্ড সেট করা যাবে।</p>',
       onOpen: function (w, close) {
-        w.querySelector('#send').onclick = async function () {
-          const tok = await Auth.requestReset(w.querySelector('#fe').value);
-          w.querySelector('#step2').style.display = 'block';
-          toast(tok ? 'Reset token: ' + tok : 'যদি অ্যাকাউন্ট থাকে, টোকেন তৈরি হয়েছে', 'info');
+        w.querySelector('#verify').onclick = async function () {
+          try {
+            await Auth.verifySecurityAnswers(w.querySelector('#fe').value, w.querySelector('#fq1').value, w.querySelector('#fq2').value);
+            w.querySelector('#step2').style.display = 'block';
+            toast('উত্তর সঠিক — এখন নতুন পাসওয়ার্ড দিন', 'info');
+          } catch (ex) { toast(ex.message, 'error'); }
         };
         w.querySelector('#doreset').onclick = async function () {
           try {
-            await Auth.resetWithToken(w.querySelector('#fe').value, w.querySelector('#ft').value.trim(), w.querySelector('#fp').value);
+            await Auth.resetWithSecurityAnswers(
+              w.querySelector('#fe').value,
+              w.querySelector('#fq1').value,
+              w.querySelector('#fq2').value,
+              w.querySelector('#fp').value
+            );
             toast('পাসওয়ার্ড পরিবর্তন হয়েছে'); close();
           } catch (ex) { toast(ex.message, 'error'); }
         };
