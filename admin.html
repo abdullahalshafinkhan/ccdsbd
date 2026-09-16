@@ -806,7 +806,7 @@ const COLLECTIONS = [
   'users', 'school', 'students', 'teachers', 'admissions', 'classes', 'sections', 'subjects',
   'feeHeads', 'payments', 'exams', 'results', 'notices', 'events',
   'albums', 'photos', 'videos', 'banners', 'counters', 'syllabus',
-  'attendance', 'messages', 'routines', 'examRoutine'
+  'attendance', 'messages', 'routines', 'examRoutine', 'studentNotices'
 ];
 
 /* ---- kept for reference / emergency offline fallback (see D1Adapter.list below) ---- */
@@ -2130,9 +2130,143 @@ async function docCharacterCertificate(p) {
   };
 }
 
+async function docTransferCertificate(p) {
+  const s = await schoolDoc();
+  const [students, classes, sections] = await Promise.all(['students', 'classes', 'sections'].map(c => DB.list(c)));
+  const cn = id => classes.find(c => c.id === id)?.name || '-';
+  const sn = id => sections.find(x => x.id === id)?.name || '-';
+  const ids = (p.get('ids') || '').split(',').filter(Boolean);
+  const picked = students.filter(x => ids.includes(x.id));
+  const leaveDate = p.get('leaveDate') || today();
+  const reason = p.get('reason') || "Guardian's Request";
+
+  const logo = s.logo ? `<img src="${esc(s.logo)}" alt="" style="width:70px;height:70px;border-radius:50%;object-fit:cover;margin:0 auto 8px;display:block;border:3px solid #e8a817">`
+    : `<div class="cc-emblem">${esc((s.name || 'S').split(' ').map(w => w[0]).slice(0, 2).join(''))}</div>`;
+
+  const cert = st => `<div class="a4 cc-sheet" style="position:relative;${wmStyle(s)}">
+    <div class="cc-inner-border"></div>
+    <div class="cc-refno">Ref: TC-${esc(st.studentId || '')}-${new Date().getFullYear()}</div>
+    <div class="cc-date">Date: ${fmtDate(new Date())}</div>
+    ${logo}
+    <div class="cc-schoolname">${esc(s.name)}</div>
+    <div class="cc-addr">${esc(s.address || '')}${s.phone ? ' • Phone: ' + esc(s.phone) : ''}${s.eiin ? ' • EIIN: ' + esc(s.eiin) : ''}</div>
+    <div class="cc-title">Transfer Certificate</div>
+    <div class="cc-body">
+      This is to certify that <b>${esc(st.name || '-')}</b>, son/daughter of <b>${esc(st.fatherName || '-')}</b> and
+      <b>${esc(st.motherName || '-')}</b>, Student ID <b>${esc(st.studentId || '-')}</b>, Admission No
+      <b>${esc(st.admissionNo || '-')}</b>, was a bona fide student of <b>${esc(s.name)}</b> in Class
+      <b>${esc(cn(st.classId))}</b> (Section ${esc(sn(st.sectionId))}), Roll No <b>${esc(st.roll || '-')}</b>.<br><br>
+      He/She was admitted to this institution on <b>${fmtDate(st.admissionDate)}</b> and is hereby granted this
+      Transfer Certificate on <b>${fmtDate(leaveDate)}</b>. The reason for leaving is stated as:
+      <b>${esc(reason)}</b>.<br><br>
+      During his/her stay, his/her conduct and character were found to be <b>good and satisfactory</b>, and
+      no dues are pending against his/her name at the time of issuing this certificate.<br><br>
+      We wish him/her success in all future endeavours.
+    </div>
+    <div class="cc-seal">OFFICIAL<br>SEAL</div>
+    <div class="sign-row" style="margin-top:20px"><div>Class Teacher</div><div>Principal<br>${esc(s.principalName || '')}</div></div>
+  </div>`;
+
+  return {
+    title: `Transfer Certificate — ${picked.length} student(s)`,
+    html: !picked.length ? '<div class="a4"><p>কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>' : picked.map(cert).join('')
+  };
+}
+
+async function docTestimonial(p) {
+  const s = await schoolDoc();
+  const [students, classes, sections, results, exams] = await Promise.all(
+    ['students', 'classes', 'sections', 'results', 'exams'].map(c => DB.list(c)));
+  const cn = id => classes.find(c => c.id === id)?.name || '-';
+  const sn = id => sections.find(x => x.id === id)?.name || '-';
+  const ids = (p.get('ids') || '').split(',').filter(Boolean);
+  const picked = students.filter(x => ids.includes(x.id));
+
+  const logo = s.logo ? `<img src="${esc(s.logo)}" alt="" style="width:70px;height:70px;border-radius:50%;object-fit:cover;margin:0 auto 8px;display:block;border:3px solid #e8a817">`
+    : `<div class="cc-emblem">${esc((s.name || 'S').split(' ').map(w => w[0]).slice(0, 2).join(''))}</div>`;
+
+  const bestResult = st => results.filter(r => r.studentId === st.id).sort((a, b) => num(b.gpa) - num(a.gpa))[0];
+
+  const cert = st => {
+    const r = bestResult(st);
+    return `<div class="a4 cc-sheet" style="position:relative;${wmStyle(s)}">
+    <div class="cc-inner-border"></div>
+    <div class="cc-refno">Ref: TES-${esc(st.studentId || '')}-${new Date().getFullYear()}</div>
+    <div class="cc-date">Date: ${fmtDate(new Date())}</div>
+    ${logo}
+    <div class="cc-schoolname">${esc(s.name)}</div>
+    <div class="cc-addr">${esc(s.address || '')}${s.phone ? ' • Phone: ' + esc(s.phone) : ''}${s.eiin ? ' • EIIN: ' + esc(s.eiin) : ''}</div>
+    <div class="cc-title">Testimonial</div>
+    <div class="cc-body">
+      This is to certify that <b>${esc(st.name || '-')}</b>, son/daughter of <b>${esc(st.fatherName || '-')}</b>,
+      Student ID <b>${esc(st.studentId || '-')}</b>, is/was a student of <b>${esc(s.name)}</b> in Class
+      <b>${esc(cn(st.classId))}</b> (Section ${esc(sn(st.sectionId))}), Roll No <b>${esc(st.roll || '-')}</b>,
+      during the academic session <b>${esc(st.session || '-')}</b>.<br><br>
+      ${r ? `In the <b>${esc(exams.find(e => e.id === r.examId)?.name || '-')}</b> examination, he/she obtained
+      GPA <b>${num(r.gpa).toFixed(2)}</b> and secured Grade <b>${esc(r.grade)}</b>.<br><br>` : ''}
+      Throughout his/her academic life here, he/she has shown sincerity, discipline, and a strong sense of
+      responsibility, and his/her moral conduct has been found to be <b>excellent</b>. We are confident that
+      he/she will continue to uphold these qualities in future academic and professional life.<br><br>
+      We wish him/her every success in life.
+    </div>
+    <div class="cc-seal">OFFICIAL<br>SEAL</div>
+    <div class="sign-row" style="margin-top:20px"><div>Class Teacher</div><div>Principal<br>${esc(s.principalName || '')}</div></div>
+  </div>`;
+  };
+
+  return {
+    title: `Testimonial — ${picked.length} student(s)`,
+    html: !picked.length ? '<div class="a4"><p>কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>' : picked.map(cert).join('')
+  };
+}
+
+async function docExtraCurricular(p) {
+  const s = await schoolDoc();
+  const [students, classes, sections] = await Promise.all(['students', 'classes', 'sections'].map(c => DB.list(c)));
+  const cn = id => classes.find(c => c.id === id)?.name || '-';
+  const sn = id => sections.find(x => x.id === id)?.name || '-';
+  const ids = (p.get('ids') || '').split(',').filter(Boolean);
+  const picked = students.filter(x => ids.includes(x.id));
+  const activity = p.get('activity') || 'Extra-Curricular Activities';
+  const achievement = p.get('achievement') || '';
+  const eventDate = p.get('eventDate') || '';
+
+  const logo = s.logo ? `<img src="${esc(s.logo)}" alt="" style="width:70px;height:70px;border-radius:50%;object-fit:cover;margin:0 auto 8px;display:block;border:3px solid #e8a817">`
+    : `<div class="cc-emblem">${esc((s.name || 'S').split(' ').map(w => w[0]).slice(0, 2).join(''))}</div>`;
+
+  const cert = st => `<div class="a4 cc-sheet" style="position:relative;${wmStyle(s)}">
+    <div class="cc-inner-border"></div>
+    <div class="cc-refno">Ref: ECC-${esc(st.studentId || '')}-${new Date().getFullYear()}</div>
+    <div class="cc-date">Date: ${fmtDate(new Date())}</div>
+    ${logo}
+    <div class="cc-schoolname">${esc(s.name)}</div>
+    <div class="cc-addr">${esc(s.address || '')}${s.phone ? ' • Phone: ' + esc(s.phone) : ''}${s.eiin ? ' • EIIN: ' + esc(s.eiin) : ''}</div>
+    <div class="cc-title">Certificate of Extra-Curricular Achievement</div>
+    <div class="cc-body" style="text-align:center">
+      This certificate is proudly presented to<br>
+      <span style="font-size:20px;font-weight:800;color:#0a5c47;display:block;margin:8px 0">${esc(st.name || '-')}</span>
+      <span style="font-size:13px">Class ${esc(cn(st.classId))} (Section ${esc(sn(st.sectionId))}) • Roll ${esc(st.roll || '-')} • Student ID ${esc(st.studentId || '-')}</span><br><br>
+      <span style="text-align:justify;display:block">
+      for his/her outstanding participation in <b>${esc(activity)}</b>${eventDate ? ' held on <b>' + fmtDate(eventDate) + '</b>' : ''}${achievement ? ', achieving <b>' + esc(achievement) + '</b>' : ''}.
+      His/her dedication, discipline, and enthusiasm in co-curricular activities are highly appreciated and
+      set an example for fellow students.</span><br><br>
+      We congratulate him/her and wish continued success in future endeavours.
+    </div>
+    <div class="cc-seal">OFFICIAL<br>SEAL</div>
+    <div class="sign-row" style="margin-top:20px"><div>Activity In-charge</div><div>Principal<br>${esc(s.principalName || '')}</div></div>
+  </div>`;
+
+  return {
+    title: `Extra-Curricular Certificate — ${picked.length} student(s)`,
+    html: !picked.length ? '<div class="a4"><p>কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>' : picked.map(cert).join('')
+  };
+}
+
 const PRINT_DOCS = {
   'id-card': docIdCard, 'receipt': docReceipt, 'result-sheet': docResultSheet,
   'admit-card': docAdmitCard, 'character-certificate': docCharacterCertificate,
+  'transfer-certificate': docTransferCertificate, 'testimonial': docTestimonial,
+  'extra-curricular-certificate': docExtraCurricular,
   'student-profile': docStudentProfile, 'student-list': docStudentList,
   'fee-report': docFeeReport, 'due-report': docDueReport, 'result-report': docResultReport
 };
@@ -2343,7 +2477,88 @@ async function __render(view, path) {
   [classes, sections] = await Promise.all([DB.list('classes'), DB.list('sections')]);
   if (path === 'students/add') return openForm(view, null, () => location.hash = '#/students');
   if (path === 'students/classes') return classesPane(view);
+  if (path === 'students/notice') return noticeView(view);
   return listView(view);
+}
+
+/* ---------------- বিশেষ বার্তা (per-student special message, shown in the
+   Parents/Guardian portal on the public site) ---------------- */
+async function noticeView(view) {
+  const [students, notices] = await Promise.all([DB.list('students'), DB.list('studentNotices')]);
+  view.innerHTML = panel({
+    title: '💬 বিশেষ বার্তা',
+    body: `<p class="muted" style="margin-top:-6px">এখান থেকে যেকোনো শিক্ষার্থীর জন্য বিশেষ বার্তা লিখলে তা অভিভাবক পোর্টালে (Parents Login) দেখা যাবে।</p>
+      <div class="toolbar">
+        <div class="field" style="flex:2 1 220px"><input class="input" id="nq" placeholder="🔍 Name / Student ID / Roll"></div>
+        <div class="field"><select class="input" id="nfClass"><option value="">All Classes</option>${classes.map(c => `<option value="${esc(c.id)}">Class ${esc(c.name)}</option>`).join('')}</select></div>
+      </div><div id="ntbl"></div>`
+  });
+
+  const countFor = sid => notices.filter(n => n.studentId === sid).length;
+  const dt = new DataTable(document.getElementById('ntbl'), {
+    rows: students, pageSize: 10,
+    searchKeys: ['name', 'studentId', 'roll'],
+    cols: [
+      { key: 'photo', label: 'Photo', sortable: false, render: r => r.photo ? `<img class="thumb" src="${esc(r.photo)}" alt="">` : `<div class="thumb">${esc((r.name || '?')[0])}</div>` },
+      { key: 'studentId', label: 'Student ID' },
+      { key: 'name', label: 'Name' },
+      { key: 'classId', label: 'Class', render: r => `Class ${esc(clsName(r.classId))} (${esc(secName(r.sectionId))})` },
+      { key: 'roll', label: 'Roll' },
+      { key: 'id', label: 'বার্তা সংখ্যা', sortable: false, render: r => `<span class="badge ${countFor(r.id) ? 'ok' : ''}">${countFor(r.id)}</span>` },
+      { key: 'id', label: 'Actions', sortable: false, render: r => `<div class="actions">
+          <button class="btn btn-sm" data-a="write" data-id="${esc(r.id)}">✍️ বার্তা লিখুন</button></div>` }
+    ],
+    onRow: (tr) => {
+      tr.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
+        const s = students.find(x => x.id === b.dataset.id);
+        openNoticeModal(s, view);
+      });
+    }
+  });
+
+  bindSearch(document.getElementById('nq'), v => dt.setQuery(v));
+  document.getElementById('nfClass').onchange = e => dt.setFilter('classId', e.target.value);
+}
+
+async function openNoticeModal(s, view) {
+  const list = (await DB.query('studentNotices', n => n.studentId === s.id))
+    .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')));
+  modal({
+    title: `💬 বিশেষ বার্তা — ${s.name} (${esc(s.studentId)})`,
+    size: 'lg',
+    body: `
+      <div class="field"><label>নতুন বার্তা</label>
+        <textarea class="input" id="ntxt" rows="4" placeholder="এই শিক্ষার্থীর জন্য বিশেষ বার্তা লিখুন…"></textarea></div>
+      <button class="btn btn-sm" id="nsave" type="button">💾 সংরক্ষণ করুন</button>
+      <hr style="margin:16px 0;border:0;border-top:1px solid var(--line)">
+      <h4 style="margin:0 0 6px">পূর্ববর্তী বার্তা</h4>
+      <div id="nprev">${list.length ? list.map(n => `<div style="padding:10px 0;border-bottom:1px dashed var(--line)">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <b style="font-size:.85rem">${esc(fmtDate(n.date || n.createdAt))}</b>
+            <button class="btn btn-sm btn-danger" data-del="${esc(n.id)}" type="button">🗑️</button>
+          </div>
+          <p style="margin:6px 0 0;white-space:pre-wrap">${esc(n.message)}</p>
+        </div>`).join('') : '<p class="empty">এখনো কোনো বার্তা লেখা হয়নি</p>'}</div>`,
+    onOpen: (w, close) => {
+      w.querySelector('#nsave').onclick = async () => {
+        const msg = w.querySelector('#ntxt').value.trim();
+        if (!msg) return toast('বার্তা লিখুন', 'error');
+        try {
+          await DB.insert('studentNotices', { studentId: s.id, message: msg, date: today() });
+          toast('বার্তা সংরক্ষিত হয়েছে');
+          close();
+          noticeView(view);
+        } catch (ex) { toast(ex.message, 'error'); }
+      };
+      w.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+        if (!await confirmDlg('এই বার্তা ডিলিট করবেন?')) return;
+        try {
+          await DB.remove('studentNotices', b.dataset.del);
+          toast('ডিলিট হয়েছে'); close(); noticeView(view);
+        } catch (ex) { toast(ex.message, 'error'); }
+      });
+    }
+  });
 }
 
 async function classesPane(view) {
@@ -4498,6 +4713,7 @@ async function __render(view, path) {
   if (path === 'reports/fees') return feeReport(view, ctx);
   if (path === 'reports/due') return dueReport(view, ctx);
   if (path === 'reports/results') return resultReport(view, ctx);
+  if (path === 'reports/certificates') return certificatesReport(view, ctx);
   return studentReport(view, ctx);
 }
 
@@ -4609,6 +4825,87 @@ function resultReport(view, { results, students, classes, exams }) {
     ${panel({ title: '📊 Grade Distribution', nopad: true, body: tableHTML(['Grade', 'Students'], grades.map(g => [g, results.filter(r => r.grade === g).length])) })}
     ${panel({ title: '🥇 Top 10 Students', nopad: true, body: tableHTML(['#', 'Name', 'Student ID', 'Class', 'Total', 'GPA', 'Grade'], top) })}`;
   void fmtDate;
+}
+
+function certificatesReport(view, { students, classes, sections }) {
+  const clsName = id => classes.find(c => c.id === id)?.name || '-';
+  const secName = id => sections.find(x => x.id === id)?.name || '-';
+  view.innerHTML = panel({
+    title: '📜 Student Certificates (PDF)',
+    body: `<p class="muted" style="margin-top:-6px">যেকোনো শিক্ষার্থীর জন্য চারিত্রিক সনদ, ছাড়পত্র, প্রশংসাপত্র বা এক্সট্রা কারিকুলাম সনদ তৈরি করে সরাসরি PDF আকারে ডাউনলোড করুন — প্রতিটিতে স্কুলের লোগোর জলছাপ থাকবে।</p>
+      <div class="toolbar">
+        <div class="field" style="flex:2 1 220px"><input class="input" id="cq" placeholder="🔍 Name / Student ID / Roll"></div>
+        <div class="field"><select class="input" id="cfClass"><option value="">All Classes</option>${classes.map(c => `<option value="${esc(c.id)}">Class ${esc(c.name)}</option>`).join('')}</select></div>
+      </div><div id="ctbl"></div>`
+  });
+
+  const dt = new DataTable(document.getElementById('ctbl'), {
+    rows: students, pageSize: 10,
+    searchKeys: ['name', 'studentId', 'roll'],
+    cols: [
+      { key: 'photo', label: 'Photo', sortable: false, render: r => r.photo ? `<img class="thumb" src="${esc(r.photo)}" alt="">` : `<div class="thumb">${esc((r.name || '?')[0])}</div>` },
+      { key: 'studentId', label: 'Student ID' },
+      { key: 'name', label: 'Name' },
+      { key: 'classId', label: 'Class', render: r => `Class ${esc(clsName(r.classId))} (${esc(secName(r.sectionId))})` },
+      { key: 'roll', label: 'Roll' },
+      { key: 'id', label: 'Certificates', sortable: false, render: r => `<div class="actions" style="flex-wrap:wrap">
+          <a class="btn btn-sm btn-ghost" target="_blank" href="print/character-certificate.html?ids=${esc(r.id)}">📜 চারিত্রিক সনদ</a>
+          <button class="btn btn-sm btn-ghost" type="button" data-tc="${esc(r.id)}">🎓 ছাড়পত্র</button>
+          <a class="btn btn-sm btn-ghost" target="_blank" href="print/testimonial.html?ids=${esc(r.id)}">🏅 প্রশংসাপত্র</a>
+          <button class="btn btn-sm btn-ghost" type="button" data-ecc="${esc(r.id)}">🏆 এক্সট্রা কারিকুলাম সনদ</button>
+        </div>` }
+    ],
+    onRow: (tr) => {
+      tr.querySelectorAll('[data-tc]').forEach(b => b.onclick = () => openTransferModal(b.dataset.tc));
+      tr.querySelectorAll('[data-ecc]').forEach(b => b.onclick = () => openExtraCurricularModal(b.dataset.ecc));
+    }
+  });
+
+  bindSearch(document.getElementById('cq'), v => dt.setQuery(v));
+  document.getElementById('cfClass').onchange = e => dt.setFilter('classId', e.target.value);
+}
+
+function openTransferModal(studentId) {
+  modal({
+    title: '🎓 ছাড়পত্র (Transfer Certificate)',
+    body: `
+      <div class="field"><label>ছাড়পত্র প্রদানের তারিখ</label><input class="input" id="tcDate" type="date" value="${today()}"></div>
+      <div class="field"><label>ছাড়পত্রের কারণ</label><input class="input" id="tcReason" placeholder="যেমন: Guardian's Request / Transfer to another school"></div>`,
+    footer: `<button class="btn btn-ghost" data-close type="button">Cancel</button>
+      <button class="btn" id="tcGo" type="button">⬇️ PDF তৈরি করুন</button>`,
+    onOpen: (w, close) => {
+      w.querySelector('#tcGo').onclick = () => {
+        const leaveDate = w.querySelector('#tcDate').value || today();
+        const reason = w.querySelector('#tcReason').value.trim() || "Guardian's Request";
+        const url = `print/transfer-certificate.html?ids=${encodeURIComponent(studentId)}&leaveDate=${encodeURIComponent(leaveDate)}&reason=${encodeURIComponent(reason)}`;
+        close();
+        openPrintDoc(url);
+      };
+    }
+  });
+}
+
+function openExtraCurricularModal(studentId) {
+  modal({
+    title: '🏆 এক্সট্রা কারিকুলাম সনদ',
+    body: `
+      <div class="field"><label>কার্যক্রম/ইভেন্টের নাম *</label><input class="input" id="eccAct" placeholder="যেমন: Annual Sports Competition"></div>
+      <div class="field"><label>অর্জন / পজিশন</label><input class="input" id="eccAch" placeholder="যেমন: 1st Position in 100m Race"></div>
+      <div class="field"><label>তারিখ</label><input class="input" id="eccDate" type="date"></div>`,
+    footer: `<button class="btn btn-ghost" data-close type="button">Cancel</button>
+      <button class="btn" id="eccGo" type="button">⬇️ PDF তৈরি করুন</button>`,
+    onOpen: (w, close) => {
+      w.querySelector('#eccGo').onclick = () => {
+        const act = w.querySelector('#eccAct').value.trim();
+        if (!act) return toast('কার্যক্রমের নাম দিন', 'error');
+        const ach = w.querySelector('#eccAch').value.trim();
+        const eventDate = w.querySelector('#eccDate').value;
+        const url = `print/extra-curricular-certificate.html?ids=${encodeURIComponent(studentId)}&activity=${encodeURIComponent(act)}&achievement=${encodeURIComponent(ach)}&eventDate=${encodeURIComponent(eventDate)}`;
+        close();
+        openPrintDoc(url);
+      };
+    }
+  });
 }
 
 return { render: __render };
@@ -5099,7 +5396,7 @@ return { render: __render };
 
 const MENU = [
   { group: '', items: [['dashboard', '📊', 'Dashboard']] },
-  { group: 'Students', items: [['students', '👨‍🎓', 'Student List'], ['students/add', '➕', 'Add Student'], ['admissions', '📥', 'Admission Applications'], ['idcards', '🪪', 'ID Card Generator']] },
+  { group: 'Students', items: [['students', '👨‍🎓', 'Student List'], ['students/add', '➕', 'Add Student'], ['students/notice', '💬', 'বিশেষ বার্তা'], ['admissions', '📥', 'Admission Applications'], ['idcards', '🪪', 'ID Card Generator']] },
   { group: 'Teachers', items: [['teachers', '👩‍🏫', 'Teacher List'], ['teachers/add', '➕', 'Add Teacher']] },
   { group: 'Attendance', items: [['attendance', '🗓️', 'Take Attendance'], ['attendance/report', '📈', 'Attendance Report']] },
   { group: 'Fees', items: [['fees/setup', '⚙️', 'Fee Setup'], ['fees/collect', '💵', 'Collect Fee'], ['fees/history', '🧾', 'Fee History'], ['fees/receipts', '🖨️', 'Receipt Generator'], ['fees/due', '⚠️', 'Due List']] },
@@ -5110,7 +5407,7 @@ const MENU = [
   { group: 'Events', items: [['events', '📅', 'Event List'], ['events/add', '➕', 'Add Event']] },
   { group: 'Gallery', items: [['gallery/albums', '🗂️', 'Albums'], ['gallery/upload', '⬆️', 'Upload Photos'], ['gallery/videos', '🎬', 'Videos']] },
   { group: 'Syllabus', items: [['syllabus', '📚', 'Syllabus List'], ['syllabus/add', '➕', 'Add Syllabus']] },
-  { group: 'Reports', items: [['reports/students', '📈', 'Student Report'], ['reports/fees', '💰', 'Fee Report'], ['reports/due', '📉', 'Due Report'], ['reports/results', '🏆', 'Result Report']] },
+  { group: 'Reports', items: [['reports/students', '📈', 'Student Report'], ['reports/fees', '💰', 'Fee Report'], ['reports/due', '📉', 'Due Report'], ['reports/results', '🏆', 'Result Report'], ['reports/certificates', '📜', 'Student Certificates']] },
   { group: 'Settings', items: [
     ['settings/profile', '👤', 'Admin Profile'], ['settings/password', '🔑', 'Password'], ['settings/backup', '💾', 'Backup / Restore'],
     ['web/school', '🏫', 'School Information'], ['settings/school', '🏛️', 'School Settings'], ['web/home', '🏠', 'Homepage Settings'],
@@ -5153,6 +5450,7 @@ const ROUTES = {
   'dashboard': () => MOD_dashboard,
   'students': () => MOD_students,
   'students/add': () => MOD_students,
+  'students/notice': () => MOD_students,
   'admissions': () => MOD_admissions,
   'idcards': () => MOD_idcards,
   'teachers': () => MOD_teachers,
@@ -5191,6 +5489,7 @@ const ROUTES = {
   'reports/fees': () => MOD_reports,
   'reports/due': () => MOD_reports,
   'reports/results': () => MOD_reports,
+  'reports/certificates': () => MOD_reports,
   'settings/profile': () => MOD_settings,
   'settings/password': () => MOD_settings,
   'settings/school': () => MOD_settings,

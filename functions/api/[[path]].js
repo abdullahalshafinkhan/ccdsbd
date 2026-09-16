@@ -21,6 +21,8 @@
  *   POST   /api/_restore                   → replace the whole database (admin only)
  *   POST   /api/_wipe                      → delete everything (admin only)
  *   POST   /api/_send-sms                  → send SMS via bulksmsbd.net (admin only)
+ *   GET    /api/parent-portal               → guardian login (studentId + phone), returns
+ *                                              that one student's attendance/fees/results/notices
  *
  * Access control:
  *   - Requests with a correct X-Admin-Key header can read/write anything.
@@ -196,6 +198,47 @@ export async function onRequest(context) {
       if (request.method !== 'POST') return err('Method not allowed', 405);
       if (!admin) return err('Unauthorized', 401);
       return sendSms(request, env);
+    }
+
+    /* ---------- Guardian/Parent portal ----------
+       GET /api/parent-portal?studentId=STD1001&phone=01712345678
+       No admin key needed — access is gated by matching BOTH the student's
+       Student ID and their guardian's phone number against the students
+       table. Only that one student's records (attendance, fee payments,
+       published results, special messages) are returned — never the whole
+       collection — so a guardian never sees another family's data. */
+    if (parts[0] === 'parent-portal') {
+      if (request.method !== 'GET') return err('Method not allowed', 405);
+      const url = new URL(request.url);
+      const wantId = (url.searchParams.get('studentId') || '').trim().toLowerCase();
+      const rawPhone = (url.searchParams.get('phone') || '').trim();
+      const last10 = (v) => String(v || '').replace(/\D/g, '').slice(-10);
+      const wantPhone = last10(rawPhone);
+      if (!wantId || !wantPhone) return err('Student ID ও Guardian Phone নম্বর দিন', 400);
+      if (wantPhone.length !== 10) return err('সঠিক ফোন নম্বর দিন', 400);
+
+      const students = await readAll(env, 'students');
+      const student = students.find((s) =>
+        String(s.studentId || '').toLowerCase() === wantId &&
+        (last10(s.guardianPhone) === wantPhone || last10(s.phone) === wantPhone)
+      );
+      if (!student) return err('Student ID অথবা Guardian Phone সঠিক নয়', 401);
+
+      const [attendance, payments, results, notices] = await Promise.all([
+        readAll(env, 'attendance'),
+        readAll(env, 'payments'),
+        readAll(env, 'results'),
+        readAll(env, 'studentNotices')
+      ]);
+      return json({
+        student,
+        attendance: attendance.filter((a) => a.studentId === student.id),
+        payments: payments.filter((p) => p.studentId === student.id),
+        results: results.filter((r) => r.studentId === student.id && !!r.published),
+        notices: notices
+          .filter((n) => n.studentId === student.id)
+          .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')))
+      });
     }
 
     const collection = parts[0];

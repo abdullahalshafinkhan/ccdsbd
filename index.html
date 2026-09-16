@@ -1234,7 +1234,7 @@ const NAV = [
   ['#/home', 'Home'], ['#/admission', 'Admission'], ['#/about', 'About School'], ['#/principal', "Principal's Message"],
   ['#/academic', 'Academic'], ['#/teachers', 'Teachers'], ['#/students', 'Students'],
   ['#/notice', 'Notice'], ['#/events', 'Events'], ['#/gallery', 'Gallery'],
-  ['#/result', 'Results'], ['#/contact', 'Contact']
+  ['#/result', 'Results'], ['#/parent', '👪 অভিভাবক লগইন'], ['#/contact', 'Contact']
 ];
 
 async function initSite() {
@@ -1343,7 +1343,8 @@ async function buildHome() {
         <div class="slide-in">
           <h1>${esc(s.title || '')}</h1><p>${esc(s.sub || '')}</p>
           <div class="hero-btns"><a class="btn btn-light" href="#/admission">${t('apply_now')}</a>
-          <a class="btn btn-accent" href="#/result">${t('view_results')}</a></div>
+          <a class="btn btn-accent" href="#/result">${t('view_results')}</a>
+          <a class="btn btn-outline" style="color:#fff;border-color:#fff" href="#/parent">👪 অভিভাবক লগইন</a></div>
         </div></div>`).join('')
       + `<div class="hero-dots">${slides.map((_, i) => `<button class="${i === 0 ? 'on' : ''}" data-i="${i}" aria-label="Slide ${i + 1}"></button>`).join('')}</div>`;
     let idx = 0;
@@ -2010,6 +2011,7 @@ const PAGES = {
   'events': { title: 'Events', render: pageEvents },
   'gallery': { title: 'Gallery', render: pageGallery },
   'result': { title: 'Results', render: pageResult },
+  'parent': { title: 'Parents / Guardian Login', render: pageParent },
   'contact': { title: 'Contact', render: pageContact },
 };
 
@@ -2433,6 +2435,163 @@ async function pageResult(host) {
         openPrintDoc(`print/result-sheet.html?student=${encodeURIComponent(b.dataset.print)}&exam=${encodeURIComponent(b.dataset.exam)}`));
     } catch (err) { toast(err.message, 'error'); out.innerHTML = `<p class="center muted">${esc(err.message)}</p>`; }
   };
+}
+
+/* ---------------- Parents / Guardian Portal ----------------
+   No account/registration needed: login is just Student ID + Guardian
+   mobile number, checked against the dedicated /api/parent-portal
+   endpoint (no admin key required — that endpoint itself verifies both
+   values match the same student before returning any data, and only
+   ever returns that single student's records). */
+const PARENT_AUTH_KEY = 'ccdsbd_parent_auth';
+function getParentAuth() {
+  try { return JSON.parse(sessionStorage.getItem(PARENT_AUTH_KEY)); } catch (_) { return null; }
+}
+function setParentAuth(studentId, phone) {
+  try { sessionStorage.setItem(PARENT_AUTH_KEY, JSON.stringify({ studentId, phone })); } catch (_) {}
+}
+function clearParentAuth() {
+  try { sessionStorage.removeItem(PARENT_AUTH_KEY); } catch (_) {}
+}
+async function fetchParentPortal(studentId, phone) {
+  const url = `${DB.apiBase}/parent-portal?studentId=${encodeURIComponent(studentId)}&phone=${encodeURIComponent(phone)}`;
+  const res = await fetch(url);
+  let data = {};
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok) throw new Error(data.error || 'লগইন ব্যর্থ হয়েছে');
+  return data;
+}
+
+async function pageParent(host) {
+  const auth = getParentAuth();
+  if (auth && auth.studentId && auth.phone) {
+    try {
+      const data = await fetchParentPortal(auth.studentId, auth.phone);
+      return renderParentPortal(host, data);
+    } catch (_) {
+      clearParentAuth(); // stale/invalid session — fall through to login
+    }
+  }
+  renderParentLogin(host);
+}
+
+function renderParentLogin(host) {
+  host.innerHTML = `<section class="section alt"><div class="container">
+    ${secHead('Parents / Guardian', '👪 অভিভাবক লগইন', 'শিক্ষার্থীর আইডি ও অভিভাবকের মোবাইল নম্বর দিয়ে লগইন করুন — এখানে আলাদা কোনো অ্যাকাউন্ট খোলার প্রয়োজন নেই।')}
+    <div class="card card-pad" style="max-width:440px;margin:0 auto">
+      <form id="plogin">
+        <div class="field"><label>Student ID</label>
+          <input class="input" id="pid" placeholder="যেমন: STD1001" required></div>
+        <div class="field"><label>Guardian Mobile Number</label>
+          <input class="input" id="pph" placeholder="যেমন: 01700000000" required></div>
+        <p class="err center" id="plErr" style="display:none"></p>
+        <button class="btn btn-block" id="plBtn" type="submit">🔓 লগইন করুন</button>
+      </form>
+    </div></div></section>`;
+
+  document.getElementById('plogin').onsubmit = async e => {
+    e.preventDefault();
+    const errEl = document.getElementById('plErr');
+    errEl.style.display = 'none';
+    const sid = document.getElementById('pid').value.trim();
+    const ph = document.getElementById('pph').value.trim();
+    if (!sid || !ph) return;
+    const btn = document.getElementById('plBtn');
+    btn.disabled = true; btn.textContent = 'যাচাই করা হচ্ছে…';
+    try {
+      const data = await fetchParentPortal(sid, ph);
+      setParentAuth(sid, ph);
+      renderParentPortal(host, data);
+    } catch (ex) {
+      errEl.textContent = ex.message; errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = '🔓 লগইন করুন';
+    }
+  };
+}
+
+async function renderParentPortal(host, data) {
+  const { student: s, attendance = [], payments = [], results = [], notices = [] } = data;
+  const [classes, sections, subjects, exams] = await Promise.all(
+    ['classes', 'sections', 'subjects', 'exams'].map(c => DB.list(c)));
+  const cls = classes.find(c => c.id === s.classId)?.name || '-';
+  const sec = sections.find(x => x.id === s.sectionId)?.name || '-';
+
+  const attCount = { Present: 0, Absent: 0, Late: 0, Leave: 0 };
+  attendance.forEach(a => { attCount[a.status] = (attCount[a.status] || 0) + 1; });
+  const attTotal = attendance.length;
+  const attPct = attTotal ? Math.round((attCount.Present + attCount.Late) / attTotal * 100) : 0;
+  const attColor = attPct >= 80 ? '#146c3a' : attPct >= 60 ? '#a56a00' : '#b32020';
+
+  const pays = payments.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const totalDue = pays.reduce((a, p) => a + num(p.due), 0);
+  const totalPaid = pays.reduce((a, p) => a + num(p.paid), 0);
+
+  const res = results.slice().sort((a, b) => (b.session || '').localeCompare(a.session || ''));
+
+  host.innerHTML = `<section class="section alt"><div class="container">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:28px">
+      <div style="display:flex;gap:16px;align-items:center">
+        ${s.photo ? `<img class="avatar" style="width:76px;height:76px;margin:0" src="${esc(s.photo)}" alt="">`
+          : `<div class="avatar" style="width:76px;height:76px;margin:0">${esc((s.name || '?')[0])}</div>`}
+        <div><h2 style="margin:0">${esc(s.name)}</h2>
+          <span class="badge">ID: ${esc(s.studentId)}</span>
+          <span class="badge">Class ${esc(cls)} (${esc(sec)})</span>
+          <span class="badge">Roll ${esc(s.roll || '-')}</span></div>
+      </div>
+      <button class="btn btn-sm btn-outline" id="plogout" type="button">🚪 লগআউট</button>
+    </div>
+
+    <div class="grid g3" style="margin-bottom:30px">
+      <div class="card card-pad center">
+        <div style="font-size:2rem;font-weight:800;color:${attTotal ? attColor : 'var(--muted)'}">${attTotal ? attPct + '%' : '-'}</div>
+        <div class="muted" style="font-size:.85rem">উপস্থিতির হার ${attTotal ? `(মোট ${attTotal} দিন)` : ''}</div>
+      </div>
+      <div class="card card-pad center">
+        <div style="font-size:1.6rem;font-weight:800;color:${totalDue > 0 ? '#b32020' : '#146c3a'}">${money(totalDue)}</div>
+        <div class="muted" style="font-size:.85rem">ফি বকেয়া</div>
+      </div>
+      <div class="card card-pad center">
+        <div style="font-size:1.6rem;font-weight:800;color:var(--brand)">${money(totalPaid)}</div>
+        <div class="muted" style="font-size:.85rem">মোট পরিশোধিত ফি</div>
+      </div>
+    </div>
+
+    ${notices.length ? `<div class="card card-pad" style="margin-bottom:30px;border-left:4px solid var(--accent)">
+      <h3 style="margin-top:0">💬 বিশেষ বার্তা</h3>
+      ${notices.map(n => `<div style="padding:10px 0;border-bottom:1px dashed var(--line)">
+        <b style="font-size:.82rem;color:var(--muted)">${esc(fmtDate(n.date || n.createdAt))}</b>
+        <p style="margin:6px 0 0;white-space:pre-wrap">${esc(n.message)}</p>
+      </div>`).join('')}
+    </div>` : ''}
+
+    <div class="card card-pad" style="margin-bottom:30px">
+      <h3 style="margin-top:0">🗓️ উপস্থিতি সারসংক্ষেপ</h3>
+      ${attTotal ? `<div class="table-wrap"><table class="tbl"><thead><tr>
+        <th>উপস্থিত</th><th>অনুপস্থিত</th><th>বিলম্ব</th><th>ছুটি</th><th>মোট দিন</th></tr></thead>
+        <tbody><tr><td>${attCount.Present || 0}</td><td>${attCount.Absent || 0}</td><td>${attCount.Late || 0}</td>
+        <td>${attCount.Leave || 0}</td><td>${attTotal}</td></tr></tbody></table></div>`
+        : `<p class="muted">এখনো কোনো উপস্থিতি রেকর্ড নেই।</p>`}
+    </div>
+
+    <div class="card card-pad" style="margin-bottom:30px">
+      <h3 style="margin-top:0">💰 ফি রেকর্ড</h3>
+      ${pays.length ? `<div class="table-wrap"><table class="tbl"><thead><tr>
+        <th>Receipt</th><th>Fee Type</th><th>Month</th><th>Total</th><th>Paid</th><th>Due</th><th>Date</th></tr></thead>
+        <tbody>${pays.map(p => `<tr><td>${esc(p.receiptNo)}</td><td>${esc(p.feeType)}</td><td>${esc(p.month || '-')}</td>
+          <td>${money(p.total)}</td><td>${money(p.paid)}</td>
+          <td>${num(p.due) ? `<span class="badge dan">${money(p.due)}</span>` : `<span class="badge ok">0</span>`}</td>
+          <td>${fmtDate(p.date)}</td></tr>`).join('')}</tbody></table></div>`
+        : `<p class="muted">এখনো কোনো ফি রেকর্ড নেই।</p>`}
+    </div>
+
+    <div class="card card-pad">
+      <h3 style="margin-top:0">📄 পরীক্ষার ফলাফল</h3>
+      ${res.length ? res.map(r => resultCardHTML(s, r, subjects, exams.find(x => x.id === r.examId), cls, sec)).join('')
+        : `<p class="muted">এখনো কোনো প্রকাশিত ফলাফল নেই।</p>`}
+    </div>
+  </div></section>`;
+
+  document.getElementById('plogout').onclick = () => { clearParentAuth(); pageParent(host); };
 }
 
 /* ---------------- Contact ---------------- */
