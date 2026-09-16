@@ -1595,6 +1595,22 @@ function wmStyle(s) {
   return `background:linear-gradient(rgba(255,255,255,.91),rgba(255,255,255,.91)),url('${esc(s.logo)}') center/48% no-repeat,#fff;`;
 }
 
+/* Principal signature: auto-applied wherever a "Principal" sign-off appears
+   (certificates, ID cards, admit cards, result sheets, etc.) once uploaded
+   in Settings → School Settings. Falls back to a blank line for physical
+   signing when no signature image has been uploaded. */
+function principalSignCell(s, label = 'Principal') {
+  const sig = s.principalSignature
+    ? `<img src="${esc(s.principalSignature)}" alt="" style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);height:11mm;max-width:34mm;object-fit:contain;margin-bottom:2px">`
+    : '';
+  return `<div style="position:relative">${sig}${esc(label)}${s.principalName ? '<br>' + esc(s.principalName) : ''}</div>`;
+}
+function idSigBlock(s) {
+  return s.principalSignature
+    ? `<img src="${esc(s.principalSignature)}" alt="" style="height:9mm;max-width:26mm;object-fit:contain;display:block;margin:0 auto 1mm">`
+    : `<div class="sig-line">________________</div>`;
+}
+
 function docHead(s, title) {
   const logo = s.logo ? `<img class="lg" src="${esc(s.logo)}" alt="">`
     : `<div class="lg">${esc((s.name || 'S').split(' ').map(w => w[0]).slice(0, 2).join(''))}</div>`;
@@ -1693,8 +1709,8 @@ async function docIdCard(p) {
         <li>If found, please return it to the school office.</li>
       </ul>
       <div class="id-sig">
-        <div class="sig-line">________________</div>
-        <div class="sig-label">Principal<br>${esc(s.name || '')}</div>
+        ${idSigBlock(s)}
+        <div class="sig-label">Principal<br>${esc(s.principalName || '')}</div>
       </div>
       <div class="id-emg">
         <div class="id-emg-box">
@@ -1715,6 +1731,83 @@ async function docIdCard(p) {
     html: `<div class="a4"><div class="idsheet">${list.length
       ? list.map(st => (side === 'back' ? '' : front(st)) + (side === 'front' ? '' : back(st))).join('')
       : '<p>কোনো শিক্ষার্থী নির্বাচন করা হয়নি।</p>'}</div></div>`
+  };
+}
+
+async function docTeacherIdCard(p) {
+  const s = await schoolDoc();
+  const ids = (p.get('ids') || '').split(',').filter(Boolean);
+  const side = p.get('side') || 'both';
+  const teachers = await DB.list('teachers');
+  const list = teachers.filter(x => ids.includes(x.id));
+  const logo = s.logo ? `<img src="${esc(s.logo)}" alt="">`
+    : `<div class="lgph">${esc((s.name || 'S').split(' ').map(w => w[0]).slice(0, 2).join(''))}</div>`;
+  const cardVars = `--doc-font:${(s.docFont || 'system-ui,-apple-system,sans-serif').replace(/"/g, "'")};--doc-name-size:${s.docNameSize || 10}pt;--doc-text-size:${s.docTextSize || 9.5}pt`;
+
+  const front = t => `<div class="idcard" style="${cardVars}">
+    <div class="id-header">
+      <div class="id-header-inner">
+        <div class="id-logo">${logo}</div>
+        <div class="id-school">
+          <b>${esc(s.name || 'SCHOOL NAME')}</b>
+          <small>${esc(s.motto || 'Knowledge • Discipline • Success')}</small>
+        </div>
+      </div>
+    </div>
+    <div class="id-body">
+      <div class="id-side-strip"><span>Staff Identity</span></div>
+      <div class="id-photo-wrap">
+        ${t.photo ? `<img class="id-photo" src="${esc(t.photo)}" alt="">` : `<div class="id-photo" style="display:grid;place-items:center;font-size:16px;color:#94a3b8">👤</div>`}
+      </div>
+      <div class="id-name">${esc(t.name)}</div>
+      <div class="id-class">${esc(t.designation || 'Teacher')}</div>
+      <div class="id-rows">
+        <div class="row"><span class="lbl">ID No</span><span class="sep">:</span><span class="val">${esc(t.teacherIdNo || t.nid || '-')}</span></div>
+        <div class="row"><span class="lbl">Dept</span><span class="sep">:</span><span class="val">${esc(t.department || '-')}</span></div>
+        <div class="row"><span class="lbl">Contact</span><span class="sep">:</span><span class="val">${esc(t.phone || '-')}</span></div>
+        <div class="row"><span class="lbl">Issued</span><span class="sep">:</span><span class="val">${fmtDate(t.idIssueDate || t.joiningDate)}</span></div>
+        <div class="row"><span class="lbl">Expiry</span><span class="sep">:</span><span class="val">${t.idExpiryDate ? fmtDate(t.idExpiryDate) : '-'}</span></div>
+      </div>
+      <div class="id-barcode"></div>
+    </div>
+    <div class="id-footer">
+      <div>📍 ${esc((s.address || '').slice(0, 42))}</div>
+      <div>📞 ${esc(s.phone || '')} ${s.website ? ' | ' + esc(s.website) : ''}</div>
+    </div>
+  </div>`;
+
+  const back = t => `<div class="idcard" style="${cardVars}">
+    <div class="id-back">
+      <div class="id-back-pill">TERMS &amp; CONDITIONS</div>
+      <ul class="id-terms">
+        <li>This ID card is the property of ${esc(s.name || 'the school')}.</li>
+        <li>This card must be carried by the staff member at all times on campus.</li>
+        <li>This card is non-transferable.</li>
+        <li>If found, please return it to the school office.</li>
+      </ul>
+      <div class="id-sig">
+        ${idSigBlock(s)}
+        <div class="sig-label">Principal<br>${esc(s.principalName || '')}</div>
+      </div>
+      <div class="id-emg">
+        <div class="id-emg-box">
+          <div class="id-emg-title">OFFICE CONTACT</div>
+          <div class="id-emg-phones">
+            📞 ${esc(s.phone || '-')}<br>
+            📧 ${esc(s.email || '-')}
+          </div>
+        </div>
+        <div class="id-emg-qr">${qrDataFor((t.teacherIdNo || t.nid || '') + '|' + t.name + '|' + (t.designation || ''))}</div>
+      </div>
+      <div class="id-back-wave"></div>
+    </div>
+  </div>`;
+
+  return {
+    title: `Teacher ID Card — ${list.length} staff`,
+    html: `<div class="a4"><div class="idsheet">${list.length
+      ? list.map(t => (side === 'back' ? '' : front(t)) + (side === 'front' ? '' : back(t))).join('')
+      : '<p>কোনো শিক্ষক নির্বাচন করা হয়নি।</p>'}</div></div>`
   };
 }
 
@@ -1838,7 +1931,7 @@ async function docResultSheet(p) {
         <div class="rs-chip"><b>${esc(r.status)}</b><span>Result</span></div>
       </div>
       <p style="font-size:11.5px;margin-top:8px;position:relative;z-index:1"><b>Remarks:</b> ${esc(r.remarks || (r.status === 'Pass' ? 'Keep up the good work.' : 'Needs improvement.'))}</p>
-      <div class="sign-row" style="position:relative;z-index:1"><div>Class Teacher</div><div>Examination Controller</div><div>Principal<br>${esc(s.principalName || '')}</div></div>
+      <div class="sign-row" style="position:relative;z-index:1"><div>Class Teacher</div><div>Examination Controller</div>${principalSignCell(s)}</div>
       ${docFoot(s, 'Computer generated result sheet — verify at ' + (s.website || ''))}</div>`;
   };
 
@@ -1861,7 +1954,7 @@ async function docResultSheet(p) {
         ${subs.map(x => `<th class="c">${esc(x.name.slice(0, 10))}</th>`).join('')}
         <th class="c">Total</th><th class="c">GPA</th><th class="c">Grade</th><th class="c">Pos</th><th class="c">Result</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="12">কোনো ফলাফল নেই</td></tr>`}</tbody></table>
-      <div class="sign-row"><div>Prepared By</div><div>Exam Controller</div><div>Principal</div></div>${docFoot(s)}</div>`;
+      <div class="sign-row"><div>Prepared By</div><div>Exam Controller</div>${principalSignCell(s)}</div>${docFoot(s)}</div>`;
   };
 
   return {
@@ -1926,7 +2019,7 @@ async function docAdmitCard(p) {
       পরীক্ষার হলে প্রতিদিন এই প্রবেশপত্র সাথে আনতে হবে। পরীক্ষা শুরুর কমপক্ষে ৩০ মিনিট পূর্বে কেন্দ্রে উপস্থিত থাকতে হবে।
       মোবাইল ফোন বা কোনো ইলেকট্রনিক ডিভাইস পরীক্ষার হলে সম্পূর্ণ নিষিদ্ধ। প্রতিষ্ঠানের নিয়মাবলী যথাযথভাবে মেনে চলতে হবে।
     </div>
-    <div class="sign-row" style="margin-top:22px"><div>Class Teacher</div><div>Controller of Examinations</div><div>Principal<br>${esc(s.principalName || '')}</div></div>
+    <div class="sign-row" style="margin-top:22px"><div>Class Teacher</div><div>Controller of Examinations</div>${principalSignCell(s)}</div>
     <div class="ac-stub">
       <span class="lbl">✂ অফিস কপি — এই অংশ কার্যালয়ে জমা দিন</span>
       <span>${esc(st.name || '-')} • Roll ${esc(st.roll || '-')} • ${esc(exam?.name || '-')}</span>
@@ -1978,7 +2071,7 @@ async function docStudentProfile(p) {
           <td class="c">${num(r.totalMarks)}</td><td class="c">${num(r.gpa).toFixed(2)}</td><td class="c">${esc(r.grade)}</td>
           <td class="c">${esc(r.position || '-')}</td><td class="c">${esc(r.status)}</td></tr>`).join('')
           || '<tr><td colspan="7">কোনো ফলাফল নেই</td></tr>'}</tbody></table>
-      <div class="sign-row"><div>Class Teacher</div><div>Office Assistant</div><div>Principal</div></div>
+      <div class="sign-row"><div>Class Teacher</div><div>Office Assistant</div>${principalSignCell(s)}</div>
       ${docFoot(s)}</div>`
   };
 }
@@ -2000,7 +2093,7 @@ async function docStudentList(p) {
           <td class="c">${esc(x.roll)}</td><td>${esc(x.session)}</td><td>${esc(x.guardianPhone || '-')}</td>
           <td>${esc(x.status || '-')}</td></tr>`).join('') || '<tr><td colspan="9">কোনো শিক্ষার্থী নেই</td></tr>'}</tbody></table>
       <p style="font-size:11.5px;margin-top:8px"><b>Total Students:</b> ${list.length} • <b>Generated:</b> ${fmtDate(new Date())}</p>
-      <div class="sign-row"><div>Prepared By</div><div>Head Clerk</div><div>Principal</div></div>${docFoot(s)}</div>`
+      <div class="sign-row"><div>Prepared By</div><div>Head Clerk</div>${principalSignCell(s)}</div>${docFoot(s)}</div>`
   };
 }
 
@@ -2029,7 +2122,7 @@ async function docFeeReport(p) {
       <h3 style="font-size:13px;margin:14px 0 6px;color:#0b6b4f">Fee Type Summary</h3>
       <table class="ptbl"><thead><tr><th>Fee Type</th><th class="c">Collected (৳)</th></tr></thead>
         <tbody>${Object.entries(byType).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="c">${v.toLocaleString()}</td></tr>`).join('')}</tbody></table>
-      <div class="sign-row"><div>Accountant</div><div>Head Clerk</div><div>Principal</div></div>${docFoot(s)}</div>`
+      <div class="sign-row"><div>Accountant</div><div>Head Clerk</div>${principalSignCell(s)}</div>${docFoot(s)}</div>`
   };
 }
 
@@ -2049,7 +2142,7 @@ async function docDueReport() {
           <td class="c">${esc(r.st.roll || '-')}</td><td>${esc(r.st.guardianPhone || '-')}</td>
           <td class="c"><b>${r.due.toLocaleString()}</b></td></tr>`).join('') || '<tr><td colspan="7">কোনো বকেয়া নেই</td></tr>'}</tbody>
         <tfoot><tr><th colspan="6">Total Outstanding</th><th class="c">${rows.reduce((a, r) => a + r.due, 0).toLocaleString()}</th></tr></tfoot></table>
-      <div class="sign-row"><div>Accountant</div><div>Head Clerk</div><div>Principal</div></div>${docFoot(s)}</div>`
+      <div class="sign-row"><div>Accountant</div><div>Head Clerk</div>${principalSignCell(s)}</div>${docFoot(s)}</div>`
   };
 }
 
@@ -2086,7 +2179,7 @@ async function docResultReport() {
           <td>Class ${esc(classes.find(c => c.id === r.classId)?.name || '-')}</td><td class="c">${num(r.totalMarks)}</td>
           <td class="c">${num(r.gpa).toFixed(2)}</td><td class="c">${esc(r.grade)}</td></tr>`; }).join('')
           || '<tr><td colspan="7">কোনো ফলাফল নেই</td></tr>'}</tbody></table>
-      <div class="sign-row"><div>Exam Controller</div><div>Vice Principal</div><div>Principal</div></div>${docFoot(s)}</div>`
+      <div class="sign-row"><div>Exam Controller</div><div>Vice Principal</div>${principalSignCell(s)}</div>${docFoot(s)}</div>`
   };
 }
 
@@ -2120,8 +2213,7 @@ async function docCharacterCertificate(p) {
       discipline and reputation of this institution.<br><br>
       We wish him/her a bright and successful future.
     </div>
-    <div class="cc-seal">OFFICIAL<br>SEAL</div>
-    <div class="sign-row" style="margin-top:20px"><div>Class Teacher</div><div>Principal<br>${esc(s.principalName || '')}</div></div>
+    <div class="sign-row" style="margin-top:20px"><div>Class Teacher</div>${principalSignCell(s)}</div>
   </div>`;
 
   return {
@@ -2163,8 +2255,7 @@ async function docTransferCertificate(p) {
       no dues are pending against his/her name at the time of issuing this certificate.<br><br>
       We wish him/her success in all future endeavours.
     </div>
-    <div class="cc-seal">OFFICIAL<br>SEAL</div>
-    <div class="sign-row" style="margin-top:20px"><div>Class Teacher</div><div>Principal<br>${esc(s.principalName || '')}</div></div>
+    <div class="sign-row" style="margin-top:20px"><div>Class Teacher</div>${principalSignCell(s)}</div>
   </div>`;
 
   return {
@@ -2209,8 +2300,7 @@ async function docTestimonial(p) {
       he/she will continue to uphold these qualities in future academic and professional life.<br><br>
       We wish him/her every success in life.
     </div>
-    <div class="cc-seal">OFFICIAL<br>SEAL</div>
-    <div class="sign-row" style="margin-top:20px"><div>Class Teacher</div><div>Principal<br>${esc(s.principalName || '')}</div></div>
+    <div class="sign-row" style="margin-top:20px"><div>Class Teacher</div>${principalSignCell(s)}</div>
   </div>`;
   };
 
@@ -2252,8 +2342,7 @@ async function docExtraCurricular(p) {
       set an example for fellow students.</span><br><br>
       We congratulate him/her and wish continued success in future endeavours.
     </div>
-    <div class="cc-seal">OFFICIAL<br>SEAL</div>
-    <div class="sign-row" style="margin-top:20px"><div>Activity In-charge</div><div>Principal<br>${esc(s.principalName || '')}</div></div>
+    <div class="sign-row" style="margin-top:20px"><div>Activity In-charge</div>${principalSignCell(s)}</div>
   </div>`;
 
   return {
@@ -2263,7 +2352,7 @@ async function docExtraCurricular(p) {
 }
 
 const PRINT_DOCS = {
-  'id-card': docIdCard, 'receipt': docReceipt, 'result-sheet': docResultSheet,
+  'id-card': docIdCard, 'teacher-id-card': docTeacherIdCard, 'receipt': docReceipt, 'result-sheet': docResultSheet,
   'admit-card': docAdmitCard, 'character-certificate': docCharacterCertificate,
   'transfer-certificate': docTransferCertificate, 'testimonial': docTestimonial,
   'extra-curricular-certificate': docExtraCurricular,
@@ -2866,6 +2955,9 @@ const FIELDS = [
   { name: 'phone', label: 'Phone', required: true },
   { name: 'email', label: 'Email', type: 'email' },
   { name: 'nid', label: 'NID / Employee No' },
+  { name: 'teacherIdNo', label: 'Teacher ID No (ID কার্ডের জন্য)' },
+  { name: 'idIssueDate', label: 'ID Card Issue Date', type: 'date' },
+  { name: 'idExpiryDate', label: 'ID Card Expiry Date', type: 'date' },
   { name: 'status', label: 'Status', type: 'select', options: ['Active', 'Inactive', 'On Leave'] },
   { name: 'address', label: 'Address', type: 'textarea', full: true },
   { name: 'photo', label: 'Photo', type: 'file', full: true },
@@ -2873,6 +2965,7 @@ const FIELDS = [
 const RULES = { name: [V.required], designation: [V.required], subject: [V.required], qualification: [V.required], joiningDate: [V.required], phone: [V.required, V.phone], email: [V.email] };
 async function __render(view, path) {
   if (path === 'teachers/add') return openForm(null, () => location.hash = '#/teachers');
+  if (path === 'teachers/idcards') return idCards(view);
   return list(view);
 }
 
@@ -2903,6 +2996,7 @@ async function list(view) {
       { key: 'phone', label: 'Contact', render: r => `${esc(r.phone || '')}<br><small class="muted">${esc(r.email || '')}</small>` },
       { key: 'status', label: 'Status', render: r => `<span class="badge ${r.status === 'Active' ? 'ok' : 'warn'}">${esc(r.status || 'Active')}</span>` },
       { key: 'id', label: 'Actions', sortable: false, render: r => `<div class="actions">
+        <a class="btn btn-sm btn-ghost" target="_blank" href="print/teacher-id-card.html?ids=${esc(r.id)}">🪪</a>
         <button class="btn btn-sm btn-ghost" data-a="edit" data-id="${esc(r.id)}">✏️</button>
         <button class="btn btn-sm btn-danger" data-a="del" data-id="${esc(r.id)}">🗑️</button></div>` }
     ],
@@ -2943,6 +3037,55 @@ function openForm(teacher, done) {
       };
     }
   });
+}
+
+async function idCards(view) {
+  const rows = await DB.list('teachers');
+  const sel = new Set();
+
+  view.innerHTML = panel({
+    title: '🪪 Teacher ID Card Generator',
+    body: `<p class="muted" style="font-size:.85rem;margin-bottom:12px">🎨 ফন্ট স্টাইল ও সাইজ পরিবর্তনের জন্য <a href="#/settings/school">Settings → School Settings</a> দেখুন।</p>
+      <div class="toolbar">
+        <div class="field" style="flex:2 1 220px"><input class="input" id="q" placeholder="🔍 Name / Designation / Phone"></div>
+        <div class="field"><select class="input" id="fd"><option value="">All Departments</option>
+          ${[...new Set(rows.map(r => r.department).filter(Boolean))].map(d => `<option>${esc(d)}</option>`).join('')}</select></div>
+        <div class="field"><label style="font-size:.76rem">Side</label><select class="input" id="side">
+          <option value="both">Front &amp; Back</option><option value="front">Front only</option><option value="back">Back only</option></select></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="btn btn-ghost" id="all">✔ Select all (filtered)</button>
+        <button class="btn btn-ghost" id="clr">✖ Clear selection</button>
+        <button class="btn" id="gen">🪪 Generate ID Cards (<span id="cnt">0</span>)</button>
+      </div>
+      <div id="t"></div>`
+  });
+
+  const dt = new DataTable(document.getElementById('t'), {
+    rows, pageSize: 12,
+    searchKeys: ['name', 'designation', 'phone', 'teacherIdNo'],
+    cols: [
+      { key: 'id', label: '✔', sortable: false, render: r => `<input type="checkbox" data-c="${esc(r.id)}" ${sel.has(r.id) ? 'checked' : ''}>` },
+      { key: 'photo', label: 'Photo', sortable: false, render: r => r.photo ? `<img class="thumb" src="${esc(r.photo)}">` : `<div class="thumb">${esc((r.name || '?')[0])}</div>` },
+      { key: 'teacherIdNo', label: 'ID No', render: r => esc(r.teacherIdNo || r.nid || '-') },
+      { key: 'name', label: 'Name' }, { key: 'designation', label: 'Designation' },
+      { key: 'department', label: 'Department' }, { key: 'phone', label: 'Contact' },
+      { key: 'act', label: 'Single', sortable: false, render: r => `<a class="btn btn-sm btn-ghost" target="_blank" href="print/teacher-id-card.html?ids=${esc(r.id)}">🖨️</a>` }
+    ],
+    onRow: tr => tr.querySelectorAll('[data-c]').forEach(c => c.onchange = () => {
+      c.checked ? sel.add(c.dataset.c) : sel.delete(c.dataset.c);
+      document.getElementById('cnt').textContent = sel.size;
+    })
+  });
+
+  bindSearch(document.getElementById('q'), v => dt.setQuery(v));
+  document.getElementById('fd').onchange = e => dt.setFilter('department', e.target.value);
+  document.getElementById('all').onclick = () => { dt.filtered().forEach(r => sel.add(r.id)); dt.render(); document.getElementById('cnt').textContent = sel.size; };
+  document.getElementById('clr').onclick = () => { sel.clear(); dt.render(); document.getElementById('cnt').textContent = 0; };
+  document.getElementById('gen').onclick = () => {
+    if (!sel.size) return toast('অন্তত একজন শিক্ষক নির্বাচন করুন', 'error');
+    window.open(`print/teacher-id-card.html?ids=${encodeURIComponent([...sel].join(','))}&side=${document.getElementById('side').value}`, '_blank');
+  };
 }
 
 return { render: __render };
@@ -5016,6 +5159,9 @@ async function schoolSettings(view) {
         ${s.favicon ? `<img src="${esc(s.favicon)}" style="margin-top:8px;height:36px">` : '<p class="muted" style="font-size:.83rem">কোনো favicon নেই</p>'}</div>
       <div class="field"><label>Principal Photo</label><input class="input" type="file" id="pph" accept="image/*">
         ${s.principalPhoto ? `<img src="${esc(s.principalPhoto)}" style="margin-top:8px;height:78px;border-radius:10px">` : ''}</div>
+      <div class="field"><label>Principal Signature</label><input class="input" type="file" id="psig" accept="image/*">
+        ${s.principalSignature ? `<img src="${esc(s.principalSignature)}" style="margin-top:8px;height:44px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:4px">` : '<p class="muted" style="font-size:.83rem">কোনো স্বাক্ষর নেই</p>'}
+        <p class="muted" style="font-size:.78rem;margin-top:4px">স্বচ্ছ (transparent) ব্যাকগ্রাউন্ডের PNG ছবি হলে সবচেয়ে ভালো দেখাবে। এটি আইডি কার্ড, সার্টিফিকেট ও মার্কশীটে অধ্যক্ষের স্বাক্ষর হিসেবে স্বয়ংক্রিয়ভাবে যুক্ত হবে।</p></div>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn" id="save">💾 Save Images</button>
@@ -5051,10 +5197,11 @@ async function schoolSettings(view) {
       <button class="btn" id="saveLogout" style="margin-top:10px">💾 সেভ করুন</button>` });
   document.getElementById('save').onclick = async () => {
     const patch = {};
-    const l = document.getElementById('logo').files[0], f = document.getElementById('fav').files[0], p = document.getElementById('pph').files[0];
+    const l = document.getElementById('logo').files[0], f = document.getElementById('fav').files[0], p = document.getElementById('pph').files[0], sg = document.getElementById('psig').files[0];
     if (l) patch.logo = await uploadImage(l, 300, 'logo');
     if (f) patch.favicon = await fileToDataURL(f, 64);
     if (p) patch.principalPhoto = await uploadImage(p, 500, 'principal');
+    if (sg) patch.principalSignature = await uploadImage(sg, 400, 'signature');
     if (!Object.keys(patch).length) return toast('কোনো ফাইল নির্বাচন করা হয়নি', 'error');
     await DB.update('school', s.id, patch); toast('Saved'); location.reload();
   };
@@ -5397,7 +5544,7 @@ return { render: __render };
 const MENU = [
   { group: '', items: [['dashboard', '📊', 'Dashboard']] },
   { group: 'Students', items: [['students', '👨‍🎓', 'Student List'], ['students/add', '➕', 'Add Student'], ['students/notice', '💬', 'বিশেষ বার্তা'], ['admissions', '📥', 'Admission Applications'], ['idcards', '🪪', 'ID Card Generator']] },
-  { group: 'Teachers', items: [['teachers', '👩‍🏫', 'Teacher List'], ['teachers/add', '➕', 'Add Teacher']] },
+  { group: 'Teachers', items: [['teachers', '👩‍🏫', 'Teacher List'], ['teachers/add', '➕', 'Add Teacher'], ['teachers/idcards', '🪪', 'Teacher ID Card']] },
   { group: 'Attendance', items: [['attendance', '🗓️', 'Take Attendance'], ['attendance/report', '📈', 'Attendance Report']] },
   { group: 'Fees', items: [['fees/setup', '⚙️', 'Fee Setup'], ['fees/collect', '💵', 'Collect Fee'], ['fees/history', '🧾', 'Fee History'], ['fees/receipts', '🖨️', 'Receipt Generator'], ['fees/due', '⚠️', 'Due List']] },
   { group: 'Results', items: [['results/setup', '⚙️', 'Result Setup'], ['results/marks', '✍️', 'Enter Marks'], ['results/list', '📋', 'Result List'], ['results/sheet', '📄', 'Result Sheet / Certificate'], ['results/admit', '🪪', 'Admit Card']] },
@@ -5455,6 +5602,7 @@ const ROUTES = {
   'idcards': () => MOD_idcards,
   'teachers': () => MOD_teachers,
   'teachers/add': () => MOD_teachers,
+  'teachers/idcards': () => MOD_teachers,
   'attendance': () => MOD_attendance,
   'attendance/report': () => MOD_attendance,
   'fees/setup': () => MOD_fees,

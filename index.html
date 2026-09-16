@@ -1197,7 +1197,7 @@ const I18N = {
     syllabus_download: '📥 ডাউনলোড', no_syllabus: 'এখনো কোনো সিলেবাস আপলোড করা হয়নি।',
     holiday_kicker: 'Holidays', holiday_title: 'বাৎসরিক ছুটির তালিকা', holiday_sub: 'শিক্ষাবর্ষের সরকারি ও প্রাতিষ্ঠানিক ছুটির তালিকা।',
     holiday_name: 'ছুটির নাম', holiday_from: 'শুরু', holiday_to: 'শেষ', no_holiday: 'এখনো কোনো ছুটির তালিকা প্রকাশ করা হয়নি।',
-    login: '🔒 Login',
+    login: '🔒 Login', parents_login: '👪 অভিভাবক লগইন',
   },
   en: {
     notice_tag: '📢 Notice', quick_links: 'Quick Links', more: 'More', contact: 'Contact',
@@ -1225,7 +1225,7 @@ const I18N = {
     syllabus_download: '📥 Download', no_syllabus: 'No syllabus has been uploaded yet.',
     holiday_kicker: 'Holidays', holiday_title: 'Annual Holiday List', holiday_sub: 'List of official and institutional holidays for the academic year.',
     holiday_name: 'Holiday', holiday_from: 'From', holiday_to: 'To', no_holiday: 'No holiday list has been published yet.',
-    login: '🔒 Login',
+    login: '🔒 Login', parents_login: '👪 Parents Login',
   }
 };
 function t(key) { return (I18N[LANG] && I18N[LANG][key]) ?? (I18N.bn[key] ?? key); }
@@ -1234,7 +1234,7 @@ const NAV = [
   ['#/home', 'Home'], ['#/admission', 'Admission'], ['#/about', 'About School'], ['#/principal', "Principal's Message"],
   ['#/academic', 'Academic'], ['#/teachers', 'Teachers'], ['#/students', 'Students'],
   ['#/notice', 'Notice'], ['#/events', 'Events'], ['#/gallery', 'Gallery'],
-  ['#/result', 'Results'], ['#/parent', '👪 অভিভাবক লগইন'], ['#/contact', 'Contact']
+  ['#/result', 'Results'], ['#/parent', t('parents_login')], ['#/contact', 'Contact']
 ];
 
 async function initSite() {
@@ -1344,7 +1344,7 @@ async function buildHome() {
           <h1>${esc(s.title || '')}</h1><p>${esc(s.sub || '')}</p>
           <div class="hero-btns"><a class="btn btn-light" href="#/admission">${t('apply_now')}</a>
           <a class="btn btn-accent" href="#/result">${t('view_results')}</a>
-          <a class="btn btn-outline" style="color:#fff;border-color:#fff" href="#/parent">👪 অভিভাবক লগইন</a></div>
+          <a class="btn btn-outline" style="color:#fff;border-color:#fff" href="#/parent">${t('parents_login')}</a></div>
         </div></div>`).join('')
       + `<div class="hero-dots">${slides.map((_, i) => `<button class="${i === 0 ? 'on' : ''}" data-i="${i}" aria-label="Slide ${i + 1}"></button>`).join('')}</div>`;
     let idx = 0;
