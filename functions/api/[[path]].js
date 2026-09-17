@@ -39,7 +39,7 @@
 const PUBLIC_READ = new Set([
   'school', 'teachers', 'classes', 'sections', 'subjects', 'notices',
   'events', 'albums', 'photos', 'videos', 'banners', 'results', 'exams',
-  'students', 'counters', 'syllabus'
+  'students', 'counters', 'syllabus', 'routines'
 ]);
 
 // rows in these collections are filtered before being sent to a non-admin reader
@@ -239,6 +239,42 @@ export async function onRequest(context) {
           .filter((n) => n.studentId === student.id)
           .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')))
       });
+    }
+
+    /* ---------- Biometric attendance device punch (future-ready stub) ----------
+       POST /api/attendance/punch
+       Header: X-Device-Key: <school.biometricDeviceKey>
+       Body:   { studentId: "STD1001", method: "fingerprint"|"face", status?: "Present", date?: "YYYY-MM-DD", timestamp?: ISOString }
+       This lets a fingerprint/face-punch attendance device push records directly,
+       alongside (not instead of) manual "Take Attendance" — nothing changes for
+       manual entry until a school configures a Device Key in Settings and points
+       their device at this endpoint. */
+    if (parts[0] === 'attendance' && parts[1] === 'punch') {
+      if (request.method !== 'POST') return err('Method not allowed', 405);
+      const body = await request.json().catch(() => null);
+      if (!body) return err('Invalid JSON body', 400);
+      const schoolRows = await readAll(env, 'school');
+      const school = schoolRows[0] || {};
+      const deviceKey = request.headers.get('X-Device-Key') || '';
+      if (!school.biometricDeviceKey) return err('Biometric device সেটআপ করা নেই। Settings এ Device Key যোগ করুন।', 400);
+      if (deviceKey !== school.biometricDeviceKey) return err('Unauthorized device', 401);
+
+      const wantId = String(body.studentId || '').trim().toLowerCase();
+      if (!wantId) return err('studentId প্রয়োজন', 400);
+      const students = await readAll(env, 'students');
+      const student = students.find((s) => String(s.studentId || '').toLowerCase() === wantId);
+      if (!student) return err('Student পাওয়া যায়নি', 404);
+
+      const date = (body.date || new Date().toISOString().slice(0, 10));
+      const now = new Date().toISOString();
+      const method = body.method === 'face' ? 'Face Punch' : 'Fingerprint Punch';
+      const row = {
+        id: `att_${student.id}_${date}`, studentId: student.id, date,
+        classId: student.classId || '', sectionId: student.sectionId || '',
+        status: body.status || 'Present', method, punchedAt: body.timestamp || now
+      };
+      await upsertStmt(env, 'attendance', row, now).run();
+      return json({ ok: true, attendance: row }, 201);
     }
 
     const collection = parts[0];

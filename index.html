@@ -1201,6 +1201,7 @@ const I18N = {
     nav_home: 'হোম', nav_admission: 'ভর্তি', nav_about: 'পরিচিতি', nav_principal: 'প্রধান শিক্ষকের বাণী',
     nav_academic: 'একাডেমিক', nav_teachers: 'শিক্ষকমণ্ডলী', nav_students: 'শিক্ষার্থী',
     nav_notice: 'নোটিশ', nav_events: 'ইভেন্ট', nav_gallery: 'গ্যালারি', nav_results: 'ফলাফল', nav_contact: 'যোগাযোগ',
+    class_routine: 'ক্লাস রুটিন', no_routine: 'এখনো কোনো রুটিন প্রকাশ করা হয়নি।', select_class: 'ক্লাস নির্বাচন করুন',
   },
   en: {
     notice_tag: '📢 Notice', quick_links: 'Quick Links', more: 'More', contact: 'Contact',
@@ -1232,6 +1233,7 @@ const I18N = {
     nav_home: 'Home', nav_admission: 'Admission', nav_about: 'About School', nav_principal: "Principal's Message",
     nav_academic: 'Academic', nav_teachers: 'Teachers', nav_students: 'Students',
     nav_notice: 'Notice', nav_events: 'Events', nav_gallery: 'Gallery', nav_results: 'Results', nav_contact: 'Contact',
+    class_routine: 'Class Routine', no_routine: 'No class routine has been published yet.', select_class: 'Select Class',
   }
 };
 function t(key) { return (I18N[LANG] && I18N[LANG][key]) ?? (I18N.bn[key] ?? key); }
@@ -1366,6 +1368,7 @@ async function buildHome() {
   const [students, teachers, classes, notices, events, photos, syllabusRows, holidayList] = await Promise.all(
     ['students', 'teachers', 'classes', 'notices', 'events', 'photos', 'syllabus'].map(c => DB.list(c))
       .concat([Promise.resolve(SCHOOL.holidays || [])]));
+  const routines = await DB.list('routines').catch(() => []);
 
   const st = $('#statStrip');
   if (st) st.innerHTML = `<div class="container"><div class="grid">
@@ -1440,6 +1443,33 @@ async function buildHome() {
         <h4 style="margin:0 0 10px">Class ${esc(classMap[g.cls.id] || '')}</h4>
         ${g.items.map(it => `<a class="btn btn-sm btn-outline" style="margin:0 6px 6px 0" href="${esc(it.file)}" target="_blank" rel="noopener" download="${esc(it.fileName || 'syllabus.pdf')}">${t('syllabus_download')} — ${esc(it.title || '')}</a>`).join('')}
       </div>`).join('')}</div>` : `<p class="muted">${t('no_syllabus')}</p>`;
+  }
+
+  const rteClassSel = $('#homeRoutineClass');
+  const rteBox = $('#routineBox');
+  if (rteClassSel && rteBox) {
+    const sortedClasses = classes.slice().sort((a, b) => (a.numeric ?? 0) - (b.numeric ?? 0));
+    const DAY_ORDER = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const classesWithRoutine = sortedClasses.filter(c => routines.some(r => r.classId === c.id));
+    const renderRoutine = () => {
+      const cid = rteClassSel.value;
+      const rows = routines.filter(r => r.classId === cid)
+        .slice().sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day) || (a.period || 0) - (b.period || 0));
+      rteBox.innerHTML = rows.length ? `<div class="table-wrap"><table class="tbl">
+        <thead><tr><th>Day</th><th>Period</th><th>Time</th><th>Subject</th><th>Room</th></tr></thead>
+        <tbody>${rows.map(r => `<tr><td>${esc(r.day || '-')}</td><td>${esc(r.period || '-')}</td>
+          <td>${esc(r.startTime || '')}${r.startTime && r.endTime ? ' - ' : ''}${esc(r.endTime || '')}</td>
+          <td>${esc(r.subject || '-')}</td><td>${esc(r.room || '-')}</td></tr>`).join('')}</tbody>
+      </table></div>` : `<p class="muted">${t('no_routine')}</p>`;
+    };
+    if (classesWithRoutine.length) {
+      rteClassSel.innerHTML = classesWithRoutine.map(c => `<option value="${esc(c.id)}">Class ${esc(c.name)}</option>`).join('');
+      rteClassSel.onchange = renderRoutine;
+      renderRoutine();
+    } else {
+      rteClassSel.innerHTML = `<option value="">${esc(t('select_class'))}</option>`;
+      rteBox.innerHTML = `<p class="muted">${t('no_routine')}</p>`;
+    }
   }
 
   const hb = $('#holidayBox');
@@ -2067,6 +2097,13 @@ async function pageHome(host) {
         <div class="feature"><div class="ic">🕘</div><h4>${t('class_time')}</h4><p>${t('class_time_d')}</p></div>
         <div class="feature"><div class="ic">📝</div><h4>${t('exam_system')}</h4><p>${t('exam_system_d')}</p></div>
       </div><div class="center" style="margin-top:22px"><a class="btn" href="#/academic">${t('academic_more')}</a></div>
+      <div class="card card-pad" style="margin-top:26px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <h3 style="margin:0">🗓️ ${t('class_routine')}</h3>
+          <select class="input" id="homeRoutineClass" style="max-width:220px"></select>
+        </div>
+        <div id="routineBox" style="margin-top:14px"></div>
+      </div>
     </div></section>
     <section class="section alt"><div class="container">
       ${secHead(t('syllabus_kicker'), t('syllabus_title'), t('syllabus_sub'))}

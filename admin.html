@@ -3755,7 +3755,8 @@ async function list(view) {
   });
   view.innerHTML = panel({
     title: '📋 Result List',
-    actions: `<button class="btn btn-sm btn-ghost" id="exp">⬇️ Export CSV</button>
+    actions: `<button class="btn btn-sm" id="pubAll">✅ Publish All</button>
+      <button class="btn btn-sm btn-ghost" id="exp">⬇️ Export CSV</button>
       <a class="btn btn-sm btn-ghost" target="_blank" href="print/result-report.html">🖨️ Result Report</a>`,
     body: `<div class="toolbar">
       <div class="field" style="flex:2 1 200px"><input class="input" id="q" placeholder="🔍 Student / ID / Roll"></div>
@@ -3795,6 +3796,14 @@ async function list(view) {
       studentId: r.sid, name: r.name, class: r.cls, section: r.sec, roll: r.roll, exam: r.exam,
       total: r.totalMarks, average: num(r.average).toFixed(2), gpa: num(r.gpa).toFixed(2), grade: r.grade, position: r.position, status: r.status
     }))), 'text/csv;charset=utf-8'); toast('Exported');
+  };
+  document.getElementById('pubAll').onclick = async () => {
+    const toPublish = dt.filtered().filter(r => !r.published);
+    if (!toPublish.length) return toast('প্রকাশযোগ্য নতুন কোনো ফলাফল নেই', 'info');
+    if (!await confirmDlg(`বর্তমান ফিল্টারে থাকা ${toPublish.length}টি ফলাফল একসাথে Publish করবেন?`)) return;
+    for (const r of toPublish) await DB.update('results', r.id, { published: true });
+    toast(`${toPublish.length}টি ফলাফল Publish করা হয়েছে`);
+    list(view);
   };
 }
 
@@ -3975,13 +3984,18 @@ async function __render(view, path) {
 }
 
 async function renderTake(view) {
-  const [students, classes, sections, att] = await Promise.all(['students','classes','sections','attendance'].map(c => DB.list(c)));
+  const [students, classes, sections, att, schoolRows] = await Promise.all(['students','classes','sections','attendance','school'].map(c => DB.list(c)));
+  const school = schoolRows[0] || {};
   const todayStr = today();
   const STATUS_COLS = [['Present','Present'],['Absent','Absent'],['Late','Late'],['Leave','Leave']];
 
   view.innerHTML = panel({
     title: '🗓️ Take Attendance',
-    body: `<div class="att-toolbar">
+    body: `<div class="muted" style="font-size:.82rem;background:#f2f7f5;border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:12px">
+      ✋ <b>Manual Attendance</b> সবসময় চালু আছে। 🖐️ <b>Biometric (Fingerprint/Face Punch):</b>
+      ${school.biometricDeviceKey ? '<span class="badge ok">Connected</span> — ডিভাইস থেকে পাঞ্চ করা attendance এখানেই স্বয়ংক্রিয়ভাবে যোগ হবে।' : '<span class="badge warn">Not set up yet</span> — <a href="#/settings/school">Settings → Biometric Attendance</a> থেকে Device Key জেনারেট করে যেকোনো সময় চালু করতে পারবেন।'}
+    </div>
+    <div class="att-toolbar">
       <div class="att-field"><input class="att-input" type="date" id="adate" value="${todayStr}"></div>
       <div class="att-field"><select class="att-input" id="aclass"><option value="">Select Class</option>
         ${classes.sort((a,b)=>a.numeric-b.numeric).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></div>
@@ -4215,7 +4229,8 @@ return { render: __render };
 const MOD_routine = (function(){
 const DAYS = ['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday'];
 async function __render(view) {
-  const [routines, classes, teachers, subjects] = await Promise.all(['routines','classes','teachers','subjects'].map(c => DB.list(c)));
+  const [classes, teachers, subjects] = await Promise.all(['classes','teachers','subjects'].map(c => DB.list(c)));
+  let routines = await DB.list('routines');
   const clsName = id => classes.find(c => c.id === id)?.name || '-';
   const tchName = id => teachers.find(t => t.id === id)?.name || '-';
   const subName = id => subjects.find(s => s.id === id)?.name || id || '-';
@@ -4250,7 +4265,11 @@ async function __render(view) {
       </tr>`).join('')}</tbody></table>` : '<div class="empty">কোনো রুটিন নেই। Add Period করুন।</div>';
 
     $$('[data-del]').forEach(b => b.onclick = async () => {
-      if (await confirmDlg('পিরিয়ড ডিলিট?')) { await DB.remove('routines', b.dataset.del); toast('Deleted'); renderTable(); }
+      if (await confirmDlg('পিরিয়ড ডিলিট?')) {
+        await DB.remove('routines', b.dataset.del);
+        routines = await DB.list('routines');
+        toast('Deleted'); renderTable();
+      }
     });
   }
   document.getElementById('rclass').onchange = renderTable;
@@ -4283,6 +4302,7 @@ async function __render(view) {
             teacherId: w.querySelector('#mtch').value,
             room: (w.querySelector('#mroom').value || '').trim()
           });
+          routines = await DB.list('routines');
           toast('Period যোগ হয়েছে');
           close();
           renderTable();
@@ -5212,7 +5232,35 @@ async function schoolSettings(view) {
           <option value="30" ${s.autoLogoutMinutes == 30 ? 'selected' : ''}>৩০ মিনিট</option>
           <option value="60" ${s.autoLogoutMinutes == 60 ? 'selected' : ''}>৬০ মিনিট</option>
         </select></div>
-      <button class="btn" id="saveLogout" style="margin-top:10px">💾 সেভ করুন</button>` });
+      <button class="btn" id="saveLogout" style="margin-top:10px">💾 সেভ করুন</button>` })
+    + panel({ title: '🖐️ Biometric Attendance (Fingerprint / Face Punch)', body: `
+      <p class="muted" style="font-size:.85rem">এখন Attendance ম্যানুয়ালি নেওয়া হচ্ছে — এটা সবসময় চালু থাকবে। ভবিষ্যতে ফিঙ্গারপ্রিন্ট বা ফেইস-পাঞ্চ ডিভাইস কিনলে,
+        নিচের Device Key জেনারেট করে ডিভাইসের সেটিংসে API Endpoint ও এই Key বসিয়ে দিলেই ডিভাইসের পাঞ্চ ডেটা সরাসরি Attendance-এ যোগ হতে শুরু করবে — কোনো কোড পরিবর্তনের দরকার হবে না।</p>
+      <div class="field" style="max-width:520px"><label>API Endpoint (ডিভাইসে বসাতে হবে)</label>
+        <input class="input" id="bioEndpoint" readonly value="${location.origin}/api/attendance/punch" onclick="this.select()"></div>
+      <div class="field" style="max-width:520px"><label>Device Key</label>
+        <div style="display:flex;gap:8px">
+          <input class="input" id="bioKey" readonly value="${esc(s.biometricDeviceKey || '')}" placeholder="এখনো জেনারেট করা হয়নি" onclick="this.select()">
+          <button class="btn btn-ghost btn-sm" id="bioGen" style="white-space:nowrap">🔄 Generate</button>
+        </div></div>
+      <p class="muted" style="font-size:.78rem">${s.biometricDeviceKey ? '✅ Device Key সেট করা আছে — ডিভাইস সংযোগের জন্য প্রস্তুত।' : 'এখনো কোনো Device Key জেনারেট করা হয়নি, তাই বায়োমেট্রিক অপশনটি এখনো নিষ্ক্রিয়। Manual Attendance যথারীতি কাজ করবে।'}</p>
+      <button class="btn" id="bioSave" style="margin-top:6px">💾 Save Device Key</button>
+      ${s.biometricDeviceKey ? '<button class="btn btn-ghost" id="bioClear" style="margin-top:6px;margin-left:8px">🚫 Disconnect / Remove Key</button>' : ''}` });
+  document.getElementById('bioGen').onclick = () => {
+    const key = 'bio_' + Array.from(crypto.getRandomValues(new Uint8Array(18))).map(b => b.toString(16).padStart(2, '0')).join('');
+    document.getElementById('bioKey').value = key;
+  };
+  document.getElementById('bioSave').onclick = async () => {
+    const key = document.getElementById('bioKey').value.trim();
+    if (!key) return toast('আগে Generate বাটনে চাপ দিয়ে একটি Key তৈরি করুন', 'error');
+    try { await DB.update('school', s.id, { biometricDeviceKey: key }); toast('Device Key সেভ হয়েছে'); location.reload(); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+  const bioClearBtn = document.getElementById('bioClear');
+  if (bioClearBtn) bioClearBtn.onclick = async () => {
+    if (!await confirmDlg('Device Key মুছে ফেললে বায়োমেট্রিক ডিভাইসের সংযোগ বিচ্ছিন্ন হয়ে যাবে। এগিয়ে যাবেন?')) return;
+    await DB.update('school', s.id, { biometricDeviceKey: '' }); toast('Disconnected'); location.reload();
+  };
   document.getElementById('save').onclick = async () => {
     const patch = {};
     const l = document.getElementById('logo').files[0], f = document.getElementById('fav').files[0], p = document.getElementById('pph').files[0], sg = document.getElementById('psig').files[0];
