@@ -1880,7 +1880,7 @@ async function docReceipt(p) {
         <tfoot><tr><th colspan="2" style="text-align:right">মোট =</th><th class="c">${num(pm.paid).toLocaleString()}</th></tr></tfoot></table>
       <p style="font-size:11.5px;margin-top:8px"><b>কথায়:</b> ${esc(inWords(pm.paid))} টাকা মাত্র</p>
       <p style="font-size:11px;color:#555"><b>পরিশোধের ধরণ:</b> ${esc(pm.method || '-')} &nbsp; <b>বকেয়া:</b> ${num(pm.due).toLocaleString()} টাকা</p>
-      <div class="sign-row" style="margin-top:66px"><div>অধ্যক্ষ</div><div>আদায়কারী স্বাক্ষর<br>${esc(pm.collectedBy || '')}</div></div>
+      <div class="sign-row" style="margin-top:66px">${principalSignCell(s, 'অধ্যক্ষ')}<div>আদায়কারী স্বাক্ষর<br>${esc(pm.collectedBy || '')}</div></div>
       ${docFoot(s, 'This is a computer generated receipt.')}</div>`;
   };
   return {
@@ -2981,7 +2981,7 @@ const FIELDS = [
   { name: 'name', label: 'Teacher Name', required: true },
   { name: 'designation', label: 'Designation', type: 'select', required: true, options: ['Principal', 'Vice Principal', 'Senior Teacher', 'Assistant Teacher', 'Lecturer', 'Instructor', 'Office Staff'] },
   { name: 'subject', label: 'Subject', required: true },
-  { name: 'department', label: 'Department', type: 'select', options: ['Science', 'Humanities', 'Business Studies', 'Languages', 'ICT', 'Administration', 'Physical Education'] },
+  { name: 'department', label: 'Department' },
   { name: 'qualification', label: 'Qualification', required: true },
   { name: 'joiningDate', label: 'Joining Date', type: 'date', required: true },
   { name: 'phone', label: 'Phone', required: true },
