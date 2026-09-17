@@ -1197,7 +1197,10 @@ const I18N = {
     syllabus_download: '📥 ডাউনলোড', no_syllabus: 'এখনো কোনো সিলেবাস আপলোড করা হয়নি।',
     holiday_kicker: 'Holidays', holiday_title: 'বাৎসরিক ছুটির তালিকা', holiday_sub: 'শিক্ষাবর্ষের সরকারি ও প্রাতিষ্ঠানিক ছুটির তালিকা।',
     holiday_name: 'ছুটির নাম', holiday_from: 'শুরু', holiday_to: 'শেষ', no_holiday: 'এখনো কোনো ছুটির তালিকা প্রকাশ করা হয়নি।',
-    login: '🔒 Login', parents_login: 'Parents Login',
+    login: '🔒 Login', parents_login: '👪 অভিভাবক লগইন',
+    nav_home: 'হোম', nav_admission: 'ভর্তি', nav_about: 'পরিচিতি', nav_principal: 'প্রধান শিক্ষকের বাণী',
+    nav_academic: 'একাডেমিক', nav_teachers: 'শিক্ষকমণ্ডলী', nav_students: 'শিক্ষার্থী',
+    nav_notice: 'নোটিশ', nav_events: 'ইভেন্ট', nav_gallery: 'গ্যালারি', nav_results: 'ফলাফল', nav_contact: 'যোগাযোগ',
   },
   en: {
     notice_tag: '📢 Notice', quick_links: 'Quick Links', more: 'More', contact: 'Contact',
@@ -1225,16 +1228,19 @@ const I18N = {
     syllabus_download: '📥 Download', no_syllabus: 'No syllabus has been uploaded yet.',
     holiday_kicker: 'Holidays', holiday_title: 'Annual Holiday List', holiday_sub: 'List of official and institutional holidays for the academic year.',
     holiday_name: 'Holiday', holiday_from: 'From', holiday_to: 'To', no_holiday: 'No holiday list has been published yet.',
-    login: '🔒 Login', parents_login: 'Parents Login',
+    login: '🔒 Login', parents_login: '👪 Parents Login',
+    nav_home: 'Home', nav_admission: 'Admission', nav_about: 'About School', nav_principal: "Principal's Message",
+    nav_academic: 'Academic', nav_teachers: 'Teachers', nav_students: 'Students',
+    nav_notice: 'Notice', nav_events: 'Events', nav_gallery: 'Gallery', nav_results: 'Results', nav_contact: 'Contact',
   }
 };
 function t(key) { return (I18N[LANG] && I18N[LANG][key]) ?? (I18N.bn[key] ?? key); }
 
 const NAV = [
-  ['#/home', 'Home'], ['#/admission', 'Admission'], ['#/about', 'About School'], ['#/principal', "Principal's Message"],
-  ['#/academic', 'Academic'], ['#/teachers', 'Teachers'], ['#/students', 'Students'],
-  ['#/notice', 'Notice'], ['#/events', 'Events'], ['#/gallery', 'Gallery'],
-  ['#/result', 'Results'], ['#/parent', t('parents_login')], ['#/contact', 'Contact']
+  ['#/home', t('nav_home')], ['#/admission', t('nav_admission')], ['#/about', t('nav_about')], ['#/principal', t('nav_principal')],
+  ['#/academic', t('nav_academic')], ['#/teachers', t('nav_teachers')], ['#/students', t('nav_students')],
+  ['#/notice', t('nav_notice')], ['#/events', t('nav_events')], ['#/gallery', t('nav_gallery')],
+  ['#/result', t('nav_results')], ['#/parent', t('parents_login')], ['#/contact', t('nav_contact')]
 ];
 
 async function initSite() {
@@ -1316,8 +1322,8 @@ function renderFooter() {
           ${SCHOOL.linkedin ? `<a href="${esc(SCHOOL.linkedin)}" target="_blank" rel="noopener" title="LinkedIn">in</a>` : ''}
         </div>
       </div>
-      <div><h4>${t('quick_links')}</h4>${NAV.slice(0, 6).map(([h, t]) => `<a href="${h}">${esc(t)}</a>`).join('')}</div>
-      <div><h4>${t('more')}</h4>${NAV.slice(6).map(([h, t]) => `<a href="${h}">${esc(t)}</a>`).join('')}<a href="admin.html">Admin Login</a></div>
+      <div><h4>${t('quick_links')}</h4>${NAV.slice(0, 6).map(([h, lbl]) => `<a href="${h}">${esc(lbl)}</a>`).join('')}</div>
+      <div><h4>${t('more')}</h4>${NAV.slice(6).map(([h, lbl]) => `<a href="${h}">${esc(h === '#/parent' ? 'Parents Login' : lbl)}</a>`).join('')}<a href="admin.html">Admin Login</a></div>
       <div><h4>${t('contact')}</h4>
         <p style="font-size:.9rem">📍 ${esc(SCHOOL.address)}</p>
         <p style="font-size:.9rem">📞 ${esc(SCHOOL.phone)}<br>✉ ${esc(SCHOOL.email)}<br>🌐 ${esc(SCHOOL.website)}</p>
@@ -1342,8 +1348,8 @@ async function buildHome() {
       <div class="slide ${i === 0 ? 'on' : ''}" style="background-image:${s.image ? `url('${esc(s.image)}')` : grads[i % 3]}">
         <div class="slide-in">
           <h1>${esc(s.title || '')}</h1><p>${esc(s.sub || '')}</p>
-          <div class="hero-btns"><a class="btn btn-light" href="#/admission">${t('apply_now')}</a>
-          <a class="btn btn-accent" href="#/result">${t('view_results')}</a>
+          <div class="hero-btns"><a class="btn btn-outline" style="color:#fff;border-color:#fff" href="#/admission">${t('apply_now')}</a>
+          <a class="btn btn-outline" style="color:#fff;border-color:#fff" href="#/result">${t('view_results')}</a>
           <a class="btn btn-outline" style="color:#fff;border-color:#fff" href="#/parent">${t('parents_login')}</a></div>
         </div></div>`).join('')
       + `<div class="hero-dots">${slides.map((_, i) => `<button class="${i === 0 ? 'on' : ''}" data-i="${i}" aria-label="Slide ${i + 1}"></button>`).join('')}</div>`;
