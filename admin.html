@@ -433,8 +433,7 @@ table.att-table td.c,table.att-table th.c{text-align:center}
         <input class="input" id="idf" autocomplete="username" required></div>
       <div class="field"><label>Password</label>
         <input class="input" id="pw" type="password" autocomplete="current-password" required></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <label class="checkbox"><input type="checkbox" id="rm" checked> Remember me</label>
+      <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <a href="#" id="forgot" style="font-size:.86rem">Forgot password?</a></div>
       <button type="submit" class="btn btn-block" id="loginBtn">🔓 Login</button>
       <p class="err center" id="loginErr" style="display:none"></p>
@@ -1099,7 +1098,7 @@ const Auth = {
     return DB.insert('users', { name, email: email.toLowerCase(), username, role, active: true, ...cred });
   },
 
-  async login(identifier, password, remember = false) {
+  async login(identifier, password) {
     const id = String(identifier || '').toLowerCase().trim();
     const pw = String(password || '');
     const isDefaultId = (id === 'admin@school.com' || id === 'admin');
@@ -1114,27 +1113,27 @@ const Auth = {
     // একবার ইউজার তৈরি হয়ে গেলে (এবং বিশেষ করে পাসওয়ার্ড পরিবর্তনের পর) এই বাইপাসটি আর
     // কার্যকর হবে না — এরপর থেকে শুধু ডেটাবেসে সংরক্ষিত আসল (হ্যাশড) পাসওয়ার্ড দিয়েই
     // লগইন করতে হবে, পুরনো ডিফল্ট পাসওয়ার্ড কাজ করবে না।
+    //
+    // সেশন ইচ্ছাকৃতভাবে শুধু চলতি ট্যাবের মেমোরিতে (window.__SMS_SESSION__) রাখা হয় —
+    // localStorage/sessionStorage-এ সেভ করা হয় না, যাতে পেজ রিলোড বা ব্রাউজার/ট্যাব
+    // নতুন করে খোলা হলে প্রতিবারই পাসওয়ার্ড দিয়ে লগইন করতে হয় (persistent auto-login নয়)।
     if (!user && isDefaultId && pw === 'admin123') {
       const session = {
         uid: 'admin_default',
         role: 'admin',
         name: 'School Admin',
         email: 'admin@school.com',
-        exp: Date.now() + (remember ? 30 : 8) * 3600e3,
+        exp: Date.now() + 8 * 3600e3,
         tok: 'demo_' + Date.now()
       };
-      try {
-        (remember ? localStorage : sessionStorage).setItem(SESSION_KEY, JSON.stringify(session));
-      } catch (_) {
-        window.__SMS_SESSION__ = session;
-      }
+      window.__SMS_SESSION__ = session;
       try {
         const newUser = await Auth.register({
           name: 'School Admin', email: 'admin@school.com', username: 'admin',
           password: 'admin123', role: 'admin'
         });
         session.uid = newUser.id;
-        try { (remember ? localStorage : sessionStorage).setItem(SESSION_KEY, JSON.stringify(session)); } catch (_) {}
+        window.__SMS_SESSION__ = session;
       } catch (_) {}
       return session;
     }
@@ -1142,39 +1141,27 @@ const Auth = {
     if (!user || user.active === false || !(await verifyPassword(pw, user)))
       throw new Error('Invalid credentials');
 
-    const ttl = remember ? 30 * 24 * 3600e3 : 8 * 3600e3;
-    const session = { uid: user.id, role: user.role, name: user.name, email: user.email, exp: Date.now() + ttl, tok: randB64(24) };
-    try {
-      (remember ? localStorage : sessionStorage).setItem(SESSION_KEY, JSON.stringify(session));
-    } catch (_) {
-      window.__SMS_SESSION__ = session;
-    }
+    const session = { uid: user.id, role: user.role, name: user.name, email: user.email, exp: Date.now() + 8 * 3600e3, tok: randB64(24) };
+    window.__SMS_SESSION__ = session;
     try { await DB.update('users', user.id, { lastLogin: new Date().toISOString() }); } catch (_) {}
     return session;
   },
 
   session() {
-    if (window.__SMS_SESSION__) {
-      const s = window.__SMS_SESSION__;
-      if (s.exp && s.exp < Date.now()) { delete window.__SMS_SESSION__; return null; }
-      return s;
-    }
-    const raw = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    try {
-      const s = JSON.parse(raw);
-      if (!s.exp || s.exp < Date.now()) { Auth.logout(); return null; }
-      return s;
-    } catch { return null; }
+    const s = window.__SMS_SESSION__;
+    if (!s) return null;
+    if (s.exp && s.exp < Date.now()) { delete window.__SMS_SESSION__; return null; }
+    return s;
   },
 
   isLoggedIn() { return !!Auth.session(); },
   can(role) { const s = Auth.session(); return !!s && (s.role === 'admin' || s.role === role); },
 
   logout() {
+    try { delete window.__SMS_SESSION__; } catch (_) {}
+    // পুরনো ভার্সনে (persistent login) সেভ হওয়া যেকোনো session cleanup করে দেওয়া হয়
     try { sessionStorage.removeItem(SESSION_KEY); } catch (_) {}
     try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
-    try { delete window.__SMS_SESSION__; } catch (_) {}
   },
 
   async changePassword(userId, oldPw, newPw) {
@@ -5820,6 +5807,10 @@ async function showApp() {
 }
 
 (async function initAdmin() {
+  // পুরনো ভার্সনে persistent (remember-me) login থেকে থাকা যেকোনো session localStorage/
+  // sessionStorage থেকে মুছে দেওয়া হয় — নতুন নিয়মে সেশন শুধু মেমোরিতে থাকে, তাই এটা
+  // থাকলেও কোনো প্রভাব নেই, কিন্তু পরিষ্কার রাখার জন্য মুছে দেওয়া হলো।
+  try { localStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(SESSION_KEY); } catch (_) {}
   try { await seedIfEmpty(); } catch (e) { console.warn('seed failed', e); }
   try { installPrintInterceptor(); } catch (e) { console.warn('print interceptor failed', e); }
   let s = {};
@@ -5838,9 +5829,8 @@ async function showApp() {
     err.textContent = '';
     const idf = document.getElementById('idf').value;
     const pw = document.getElementById('pw').value;
-    const rm = document.getElementById('rm').checked;
     try {
-      await Auth.login(idf, pw, rm);
+      await Auth.login(idf, pw);
       try { toast('Login successful'); } catch (_) {}
       if (!location.hash) location.hash = '#/dashboard';
       await showApp();

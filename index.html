@@ -1,41 +1,13 @@
 <!DOCTYPE html>
 <html lang="bn">
 <head>
-<title>চাইল্ড কেয়ার ডিজিটাল &amp; স্কুল | Child Care Digital &amp; School | CCDSBD</title>
-<meta name="description" content="চাইল্ড কেয়ার ডিজিটাল &amp; স্কুল (Child Care Digital &amp; School - CCDSBD) এর অফিসিয়াল ওয়েবসাইট। স্কুলের তথ্য, নোটিশ, ভর্তি, শিক্ষা কার্যক্রম ও ডিজিটাল স্কুল সেবা এখানে পাওয়া যাবে।">
-<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
-<meta name="author" content="Child Care Digital &amp; School (চাইল্ড কেয়ার ডিজিটাল &amp; স্কুল)">
-<link rel="canonical" href="https://ccdsbd.pages.dev/">
-<meta property="og:type" content="website">
-<meta property="og:title" content="চাইল্ড কেয়ার ডিজিটাল &amp; স্কুল | Child Care Digital &amp; School | CCDSBD">
-<meta property="og:description" content="চাইল্ড কেয়ার ডিজিটাল &amp; স্কুল (CCDSBD)-এর অফিসিয়াল ওয়েবসাইট।">
-<meta property="og:url" content="https://ccdsbd.pages.dev/">
-<meta property="og:site_name" content="Child Care Digital &amp; School">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="চাইল্ড কেয়ার ডিজিটাল &amp; স্কুল | Child Care Digital &amp; School">
-<meta name="twitter:description" content="চাইল্ড কেয়ার ডিজিটাল &amp; স্কুল (CCDSBD)-এর অফিসিয়াল ওয়েবসাইট।">
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "School",
-  "name": "Child Care Digital & School",
-  "alternateName": [
-    "CCDSBD",
-    "চাইল্ড কেয়ার ডিজিটাল & স্কুল",
-    "চাইল্ড কেয়ার ডিজিটাল অ্যান্ড স্কুল"
-  ],
-  "url": "https://ccdsbd.pages.dev/",
-  "description": "চাইল্ড কেয়ার ডিজিটাল & স্কুল (Child Care Digital & School - CCDSBD) এর অফিসিয়াল ওয়েবসাইট।"
-}
-</script>
-
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-
-
+<title>School Website</title>
+<meta name="description" content="Official school website — notices, results, teachers, events and gallery.">
 <style>
 /* ================= Public Website Theme ================= */
 :root{
@@ -1381,6 +1353,7 @@ async function buildHome() {
           <div class="hero-btns"><a class="btn btn-outline" style="color:#fff;border-color:#fff" href="#/admission">${t('apply_now')}</a>
           <a class="btn btn-outline" style="color:#fff;border-color:#fff" href="#/result">${t('view_results')}</a>
           <a class="btn btn-outline" style="color:#fff;border-color:#fff" href="#/parent">${t('parents_login')}</a></div>
+          <p style="margin-top:12px"><a href="#/admission" style="color:#fff;text-decoration:underline;font-size:.86rem;opacity:.9">আগে আবেদন করেছেন? আপনার ফর্ম আবার ডাউনলোড করুন</a></p>
         </div></div>`).join('')
       + `<div class="hero-dots">${slides.map((_, i) => `<button class="${i === 0 ? 'on' : ''}" data-i="${i}" aria-label="Slide ${i + 1}"></button>`).join('')}</div>`;
     let idx = 0;
@@ -1594,7 +1567,7 @@ function openPrintWindow(title, bodyHTML) {
   if (!w) { toast('Popup blocked — অনুগ্রহ করে popup অনুমতি দিন', 'error'); return null; }
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    
+    <title>${esc(title)}</title>
     <style>${PRINT_CSS_PLACEHOLDER}</style>
     <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"><\/script>
     </head><body class="print-root" style="background:#e9eef1;margin:0">
@@ -2191,6 +2164,18 @@ async function pageAdmission(host) {
       <form id="admForm" autocomplete="off">${formHTML(FIELDS, {})}</form>
       <div class="center" style="margin-top:16px"><button class="btn" id="admSubmit">✅ আবেদন জমা দিন</button></div>
     </div>
+    <div class="card card-pad" style="margin-top:20px">
+      <h3 style="margin-top:0">🔎 আগে আবেদন করেছেন? ফর্ম আবার ডাউনলোড করুন</h3>
+      <p class="muted" style="font-size:.85rem;margin-top:-6px">Application No ও অভিভাবকের মোবাইল নম্বর দিয়ে আগের জমা দেওয়া আবেদনপত্রটি আবার প্রিন্ট / PDF ডাউনলোড করুন।</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div class="field" style="flex:1;min-width:180px;margin-bottom:0"><label>Application No</label>
+          <input class="input" id="admLookupNo" placeholder="যেমন: AR20260001"></div>
+        <div class="field" style="flex:1;min-width:180px;margin-bottom:0"><label>অভিভাবকের মোবাইল নম্বর</label>
+          <input class="input" id="admLookupPhone" placeholder="01XXXXXXXXX"></div>
+        <button class="btn btn-outline" id="admLookupBtn" style="white-space:nowrap">🖨️ খুঁজুন ও ডাউনলোড করুন</button>
+      </div>
+      <p class="err" id="admLookupErr" style="display:none;margin-top:8px"></p>
+    </div>
   </div></section>`;
 
   function printAdmissionForm(app) {
@@ -2221,6 +2206,28 @@ async function pageAdmission(host) {
     </div>`;
     openPrintWindow('Admission Application - ' + app.name, body);
   }
+
+  document.getElementById('admLookupBtn').onclick = async () => {
+    const errEl = document.getElementById('admLookupErr');
+    errEl.style.display = 'none';
+    const no = document.getElementById('admLookupNo').value.trim();
+    const phone = document.getElementById('admLookupPhone').value.trim();
+    if (!no || !phone) { errEl.textContent = 'Application No ও মোবাইল নম্বর দুটোই দিন'; errEl.style.display = 'block'; return; }
+    const btn = document.getElementById('admLookupBtn');
+    btn.disabled = true; const orig = btn.textContent; btn.textContent = 'খোঁজা হচ্ছে…';
+    try {
+      const url = `${DB.apiBase}/admissions/lookup?no=${encodeURIComponent(no)}&phone=${encodeURIComponent(phone)}`;
+      const res = await fetch(url);
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) throw new Error(data.error || 'আবেদন খুঁজে পাওয়া যায়নি');
+      printAdmissionForm(data.application);
+    } catch (e) {
+      errEl.textContent = e.message; errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  };
 
   document.getElementById('admSubmit').onclick = async () => {
     const w = document.getElementById('admWrap');

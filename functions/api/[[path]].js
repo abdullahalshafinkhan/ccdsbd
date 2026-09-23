@@ -277,6 +277,31 @@ export async function onRequest(context) {
       return json({ ok: true, attendance: row }, 201);
     }
 
+    /* ---------- Admission form re-download lookup ----------
+       GET /api/admissions/lookup?no=AR20260001&phone=01712345678
+       No admin key needed — gated by matching BOTH the Application No and the
+       guardian's phone against the admissions table, so a visitor can only ever
+       fetch their own application (never the whole admissions list, which
+       holds every applicant's personal data). */
+    if (parts[0] === 'admissions' && parts[1] === 'lookup') {
+      if (request.method !== 'GET') return err('Method not allowed', 405);
+      const url = new URL(request.url);
+      const wantNo = (url.searchParams.get('no') || '').trim().toLowerCase();
+      const rawPhone = (url.searchParams.get('phone') || '').trim();
+      const last10 = (v) => String(v || '').replace(/\D/g, '').slice(-10);
+      const wantPhone = last10(rawPhone);
+      if (!wantNo || !wantPhone) return err('Application No ও Guardian Phone নম্বর দিন', 400);
+      if (wantPhone.length !== 10) return err('সঠিক ফোন নম্বর দিন', 400);
+
+      const admissionsRows = await readAll(env, 'admissions');
+      const app = admissionsRows.find((a) =>
+        String(a.admissionRoll || '').toLowerCase() === wantNo &&
+        (last10(a.guardianPhone) === wantPhone || last10(a.phone) === wantPhone)
+      );
+      if (!app) return err('Application No অথবা Guardian Phone সঠিক নয়', 401);
+      return json({ application: app });
+    }
+
     const collection = parts[0];
     if (!collection) return err('Not found', 404);
 
