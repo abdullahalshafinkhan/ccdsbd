@@ -1,0 +1,14 @@
+name = "school-website"
+pages_build_output_dir = "."
+
+# After creating the D1 database (see BACKEND.md), paste its real
+# database_id below. This file is only needed for:
+#   - `npx wrangler d1 create ...` / `npx wrangler d1 execute ...` (schema setup)
+#   - `npx wrangler pages dev .` (local testing of functions/api on your machine)
+# If you connect this repo to Cloudflare Pages via the Dashboard ("Connect to Git"),
+# the D1 binding is instead configured under Pages → Settings → Functions —
+# both work; the Dashboard binding always wins in production.
+[[d1_databases]]
+binding = "DB"                 # must stay "DB" — functions/api/[[path]].js expects this name
+database_name = "school-db"
+database_id = "79c6746a-9983-473e-857a-8eec98599970"
